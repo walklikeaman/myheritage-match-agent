@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-06-23] update | Sessions 1+2 complete (399/400 OK); session 3 live
+
+**Object**: Combined SM+RM processing — cumulative totals
+**Scenario**: live run
+**Outcome**: ✅ success
+
+**What happened**:
+- **Session 1** (03:33–06:53): 200 matches, 199 OK (108 SM + 91 RM), 6 people, 1 error. Top person: ציפורה לובנוב (SM:106 RM:107). 1 saveButton NOT_FOUND error → fixed with `saveAndNavigateTo` fallback.
+- **Session 2** (09:57–13:16): 200 matches, **200 OK** (128 SM + 72 RM), 8 people, 0 errors. Top person: חיילה מלכה Kunshtadt קונשטאדט (SM:273 RM:274). With scroll=20 discovered 508 unique people vs 391 previously.
+- **Session 3** started 16:12. Cumulative: 399 confirmed, 0 errors after fix.
+
+**Known gaps** (not automated yet):
+- Photo transfer — requires separate `uploadPhoto()` clicks per photo; not in current wizard flow
+- Family-level "перенести всё" bulk-accept — each person's matches processed individually; family-level bulk confirm not yet researched
+- `wiki/concepts/selectors.md` still marked NOT YET RECONNED — should update with live selectors
+
+**Code changes**: 19d6e46 (saveButton fix), 466a829 (combined runner)
+**Updated**: `wiki/log.md`
+
+---
+
 ## [2026-06-23] update | Session 1 done (199/200 OK), session 2 live, auto-runner added
 
 **Object**: Combined SM+RM processing

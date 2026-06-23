@@ -69,5 +69,8 @@ YAML frontmatter: `type / created / updated / sources` (required) + `confidence 
 - **Verify by re-reading reality** — never report success off stdout alone.
 - **Language: follow the source** — RU/EN both fine in wiki.
 
+## VIP ancestor alert (auto-notify)
+If any confirmed match contains a **direct paternal/maternal ancestor** (прабабушка, прадедушка, прапра- и выше) — especially surname **Ганнущинер** (variants: Gannushchiner, Hannushchiner, Gannouchin, Ганнушинер, גאנושינר) — send a PushNotification immediately and log the finding in `wiki/log.md`. Run `python3 notify_vip.py` after every session to check. Do NOT notify for collateral relatives (cousins, aunts, etc.) — only direct line.
+
 ## What NOT to do
 Never edit `Context/`. Never `git add -A`. Don't pre-create empty pages (born on first ingest). Don't duplicate across pages (cross-link instead). Don't bury domain knowledge in code comments — put it in wiki.

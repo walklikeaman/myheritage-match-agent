@@ -19,10 +19,12 @@ SESSION_FILE = Path(os.getenv("SESSION_FILE", DATA_DIR / "myheritage_session.jso
 CONFIDENCE_THRESHOLD = int(os.getenv("CONFIDENCE_THRESHOLD", "80"))
 
 # Rate limiting (seconds)
+# Inter-action (within wizard): keep generous to avoid Angular race conditions
 ACTION_DELAY_MIN = 2.0
-ACTION_DELAY_MAX = 6.0
-MATCH_DELAY_MIN = 15.0
-MATCH_DELAY_MAX = 45.0
+ACTION_DELAY_MAX = 5.0
+# Inter-match: reduced after 399 confirmed matches with zero rate-limit signals
+MATCH_DELAY_MIN = 8.0
+MATCH_DELAY_MAX = 18.0
 
 # Session safety cap
 MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "200"))

@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-06-23] update | Speed: reduce inter-match delay 30s→13s avg; add progress.py + auto-runner
+
+**Object**: Session throughput optimization
+**Scenario**: refactor + tuning
+**Outcome**: ✅ success
+
+**What happened**: After 399 matches with zero rate-limit signals, reduced `MATCH_DELAY_MIN/MAX` from 15-45s (avg 30s) to 8-18s (avg 13s). Estimated savings: ~2.3x speedup on inter-match sleep, ~1.5h per session (from 3.5h to 2.0h). Added `progress.py` for at-a-glance cumulative stats. Updated `run_sessions.sh` to print progress after each session and loop until "Found 0 people". Set up watcher (PID 25863) to auto-chain sessions when session 3 finishes. Current stats: 539/57817 confirmed (0.9%), 525h estimated remaining at new rate.
+
+**Code changes**: this commit.
+**Updated**: `config.py`, `progress.py` (new), `run_sessions.sh`
+
+---
+
 ## [2026-06-23] update | Add photo transfer + relatives expansion to wizard flow; update selectors wiki
 
 **Object**: Wizard automation — completeness improvement

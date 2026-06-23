@@ -1,11 +1,14 @@
 {
-  "showOrphans": true,
-  "nodeSizeMultiplier": 1.2,
-  "linkDistance": 200,
-  "search": "(path:wiki/concepts OR path:wiki/entities OR path:wiki/sources)",
+  "showOrphans": false,
+  "nodeSizeMultiplier": 1.4,
+  "linkDistance": 180,
+  "search": "(path:wiki/people OR path:wiki/concepts OR path:wiki/entities OR path:wiki/sources)",
   "colorGroups": [
-    { "query": "path:wiki/concepts", "color": { "a": 1, "rgb": 6000639 } },
-    { "query": "path:wiki/entities", "color": { "a": 1, "rgb": 11032055 } },
-    { "query": "path:wiki/sources",  "color": { "a": 1, "rgb": 2278750 } }
+    { "query": "tag:direct-ancestor",  "color": { "a": 1, "rgb": 16744448 } },
+    { "query": "tag:vip-lineage",      "color": { "a": 1, "rgb": 16776960 } },
+    { "query": "tag:root",             "color": { "a": 1, "rgb": 5832479  } },
+    { "query": "path:wiki/concepts",   "color": { "a": 1, "rgb": 6000639  } },
+    { "query": "path:wiki/entities",   "color": { "a": 1, "rgb": 11032055 } },
+    { "query": "path:wiki/sources",    "color": { "a": 1, "rgb": 2278750  } }
   ]
 }

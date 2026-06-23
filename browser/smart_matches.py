@@ -73,6 +73,7 @@ _FIND_EXTRACT_ALL = """
 
 _CLICK_EXTRACT_ALL = """
 () => {
+    // Smart Match wizard: "Извлечь всю информацию"
     const d = [...document.querySelectorAll('*')]
                 .find(e => e.children.length === 0 &&
                            e.textContent.trim() === 'Извлечь всю информацию');
@@ -80,10 +81,19 @@ _CLICK_EXTRACT_ALL = """
         window.angular.element(d).triggerHandler('click');
         return {clicked: 'all', className: d.className};
     }
+    // Single-field sign (Smart Match, 1 field)
     const s = document.querySelector('[class*="extract_record_row_copied_all_sign"]');
     if (s) {
         window.angular.element(s).triggerHandler('click');
         return {clicked: 'single', className: s.className};
+    }
+    // Record Match wizard: "Сохранить в дерево" (saveAndNavigateTo)
+    const rmSave = [...document.querySelectorAll('a,button,[ng-click]')]
+        .find(e => e.textContent.trim().startsWith('Сохранить в дерево') ||
+                   (e.getAttribute('ng-click')||'').includes('saveAndNavigateTo'));
+    if (rmSave) {
+        window.angular.element(rmSave).triggerHandler('click');
+        return {clicked: 'rm_save', className: rmSave.className};
     }
     return {clicked: null};
 }
@@ -95,9 +105,10 @@ _CHECK_EXTRACT_SUCCESS = """
                 .find(e => e.children.length === 0 &&
                            e.textContent.trim() === 'Извлечь всю информацию');
     if (d) return d.className.includes('copied_all_from_all_true');
-    // single-field: check that the sign element has copied class
     const s = document.querySelector('[class*="extract_record_row_copied_all_sign"]');
-    return s ? s.className.includes('copied') : true;
+    if (s) return s.className.includes('copied');
+    // Record Match wizard: saveAndNavigateTo was already clicked — treat as success
+    return true;
 }
 """
 

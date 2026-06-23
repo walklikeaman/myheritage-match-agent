@@ -4,6 +4,8 @@
 Apply the `karpathy-guidelines` skill on every non-trivial task: think before
 coding, surface assumptions, surgical changes, define verifiable success.
 
+When drafting any reply to a MyHeritage message (incoming letters from potential relatives, DNA matches, researchers), apply the `humanizer` skill before finalizing the text. No em dashes, no AI vocabulary, warm and direct tone.
+
 ## First-run behaviour
 If `wiki/sources/` is empty (no ingested sources yet), say: "Drop raw files
 into `Context/` and tell me to ingest — I'll build the graph under `wiki/`." Then wait.

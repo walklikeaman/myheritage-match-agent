@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-06-23] update | Combined SM+RM session: largest-families-first with infinite-scroll sort
+
+**Object**: Smart Matches + Record Matches combined runner
+**Scenario**: refactor + adoption
+**Outcome**: ✅ success
+
+**What happened**: Implemented `--combined` mode (now the default) in `main.py`. `get_people_sorted_by_count()` in `smart_matches.py` now uses infinite-scroll (up to N scroll rounds) to load all people, extracts match counts from "Просмотрите X совпадения(-й)" text, and sorts descending. Combined runner merges Smart + Record people lists, sorts by total count (SM+RM), then processes each person's Smart Matches first, Record Matches second. Smoke test confirmed: ציפורה לובנוב tops the list with SM:106 RM:107. First live run started, confirmed [1/24] SM match for ציפורה לובנוב (55 fields extracted).
+
+**Code changes**: this commit — hash filled in after commit lands.
+**Updated**: `browser/smart_matches.py` (get_people_sorted_by_count + run_combined_session + run_smart_matches_session rewritten), `main.py` (--combined default, --smart-only, --record-only flags)
+
+---
+
 ## [2026-06-23] update | Phase 3 live run + headless Playwright agent built
 
 **Object**: Smart Matches (19 confirmed) + Record Matches automation

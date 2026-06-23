@@ -251,119 +251,216 @@ async def process_one_match(page: Page, match_url: str) -> dict:
 # Person-level iteration
 # ---------------------------------------------------------------------------
 
-async def get_person_match_urls(page: Page, person_id: str) -> list[str]:
+_EXTRACT_PEOPLE = """
+() => {
+    const seen = new Set();
+    const result = [];
+    const links = [...document.querySelectorAll('a[href*="matches-for-person"]')];
+    for (const a of links) {
+        const m = a.href.match(/matches-for-person\\/([^?]+)/);
+        if (!m || seen.has(m[1])) continue;
+        seen.add(m[1]);
+
+        // Walk up to find the card container
+        let card = a;
+        for (let i = 0; i < 6; i++) {
+            if (!card.parentElement) break;
+            card = card.parentElement;
+            if (card.className && (card.className.includes('action_elements') ||
+                card.className.includes('person_card') || card.className.includes('card'))) break;
+        }
+
+        // Extract name from card
+        const nameEl = card.querySelector('[class*="person_name"],[class*="fullname"],[class*="title"]') || a;
+        const name = nameEl.textContent.trim().substring(0, 60);
+
+        // Extract match count from "Просмотрите N совпадения"
+        const cardText = card.innerText || '';
+        const countMatch = cardText.match(/Просмотрите\\s+(\\d+)\\s+совпадени/);
+        const count = countMatch ? parseInt(countMatch[1]) : 0;
+
+        result.push({id: m[1], name, count});
+    }
+    return result;
+}
+"""
+
+
+async def get_person_match_urls(page: Page, person_id: str, match_type: int = 2) -> list[str]:
     """Return all pending match-compare URLs for a person."""
     url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-for-person/{person_id}"
-        "?matchType=2&matchStatus=32&lang=RU"
+        f"?matchType={match_type}&matchStatus=32&lang=RU"
     )
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     await _sleep(4, 6)
-
-    urls = await page.evaluate("""
+    return await page.evaluate("""
         () => [...new Set(
             [...document.querySelectorAll('a[href*="match-compare"]')]
             .map(a => a.href)
         )]
     """)
-    return urls
 
 
-async def get_people_with_pending_matches(page: Page) -> list[dict]:
+async def get_people_sorted_by_count(
+    page: Page,
+    match_type: int = 2,
+    scroll_rounds: int = 8,
+) -> list[dict]:
     """
-    Scrape the matches-by-people list and return [{id, name, count}].
-    Only returns people who still have pending matches (matchStatus=32).
+    Scrape the matches-by-people list with infinite-scroll, sort by match count desc.
+    match_type=2 → Smart Matches, match_type=1 → Record Matches.
     """
-    await page.goto(MATCHES_BY_PEOPLE_URL, wait_until="domcontentloaded", timeout=30000)
-    await _sleep(4, 6)
+    list_url = (
+        f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
+        f"?matchType={match_type}&matchStatus=32&lang=RU"
+    )
+    await page.goto(list_url, wait_until="networkidle", timeout=45000)
+    await _sleep(5, 7)
 
-    people = await page.evaluate("""
-        () => {
-            const rows = [...document.querySelectorAll('[class*="discovery_hub_person_row"],'
-                + '[class*="person-row"],[class*="personRow"]')];
-            if (rows.length === 0) {
-                // Fallback: extract from match-for-person links
-                const seen = new Set();
-                const links = [...document.querySelectorAll('a[href*="matches-for-person"]')];
-                return links
-                    .map(a => {
-                        const m = a.href.match(/matches-for-person\\/([^?]+)/);
-                        if (!m || seen.has(m[1])) return null;
-                        seen.add(m[1]);
-                        const nameEl = a.querySelector('[class*="name"],[class*="title"]') || a;
-                        return {id: m[1], name: nameEl.textContent.trim(), count: 0};
-                    })
-                    .filter(Boolean);
-            }
-            return rows.map(row => {
-                const linkEl = row.querySelector('a[href*="matches-for-person"]');
-                if (!linkEl) return null;
-                const m = linkEl.href.match(/matches-for-person\\/([^?]+)/);
-                if (!m) return null;
-                const nameEl = row.querySelector('[class*="name"],[class*="fullname"]') || linkEl;
-                const countEl = row.querySelector('[class*="count"],[class*="badge"]');
-                return {
-                    id: m[1],
-                    name: nameEl.textContent.trim().substring(0,60),
-                    count: countEl ? parseInt(countEl.textContent) || 0 : 0,
-                };
-            }).filter(Boolean);
-        }
-    """)
-    return people
+    seen_ids: set[str] = set()
+    all_people: list[dict] = []
+
+    for round_n in range(scroll_rounds):
+        batch = await page.evaluate(_EXTRACT_PEOPLE)
+        new = [p for p in batch if p["id"] not in seen_ids]
+        for p in new:
+            seen_ids.add(p["id"])
+            all_people.append(p)
+
+        if not new and round_n > 0:
+            logger.debug(f"  Scroll {round_n}: no new people — stopping scroll")
+            break
+
+        logger.debug(f"  Scroll {round_n}: +{len(new)} people (total {len(all_people)})")
+        # Scroll to bottom to trigger infinite-load
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await _sleep(3, 5)
+
+    all_people.sort(key=lambda p: p["count"], reverse=True)
+    return all_people
 
 
 # ---------------------------------------------------------------------------
-# Session runner
+# Session runners
 # ---------------------------------------------------------------------------
 
 async def run_smart_matches_session(
     page: Page,
     max_matches: int = 200,
-    start_person_index: int = 0,
+    scroll_rounds: int = 8,
 ) -> dict:
-    """
-    Main session loop. Processes people → matches until max_matches reached.
-    Returns summary dict.
-    """
+    """Smart Matches (matchType=2) session — largest families first."""
     summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
 
-    logger.info("Loading matches-by-people list…")
-    people = await get_people_with_pending_matches(page)
-    logger.info(f"Found {len(people)} people with pending matches")
+    logger.info("Loading Smart Matches by-people list (sorted by count)…")
+    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds)
+    logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
-    for person in people[start_person_index:]:
+    for person in people:
         if summary["processed"] >= max_matches:
-            logger.info(f"Reached session cap ({max_matches} matches) — stopping")
+            logger.info(f"Session cap ({max_matches}) reached — stopping")
             break
 
-        person_id = person["id"]
-        person_name = person["name"]
-        logger.info(f"\n{'='*60}\n{person_name} (ID: {person_id})")
-
-        match_urls = await get_person_match_urls(page, person_id)
-        logger.info(f"  {len(match_urls)} pending matches")
+        logger.info(f"\n{'='*60}\n{person['name']} (ID: {person['id']}, ~{person['count']} matches)")
+        match_urls = await get_person_match_urls(page, person["id"], match_type=2)
+        logger.info(f"  {len(match_urls)} pending Smart Matches")
 
         for i, url in enumerate(match_urls):
             if summary["processed"] >= max_matches:
                 break
-
             result = await process_one_match(page, url)
             status = result["status"]
             summary["processed"] += 1
             summary[status] = summary.get(status, 0) + 1
-
-            logger.info(
-                f"  [{i+1}/{len(match_urls)}] {status.upper()} "
-                f"({result['fields']} fields) | session total: {summary['processed']}"
-            )
-
-            # Inter-match delay
+            logger.info(f"  [{i+1}/{len(match_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
             if i < len(match_urls) - 1:
                 await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
         summary["people"] += 1
-        # Between people: short breath
+        await _sleep(ACTION_DELAY_MIN, ACTION_DELAY_MAX)
+
+    return summary
+
+
+async def run_combined_session(
+    page: Page,
+    max_matches: int = 200,
+    scroll_rounds: int = 8,
+) -> dict:
+    """
+    Combined mode: per person, process Smart Matches then Record Matches.
+    People sorted by total match count (largest families first).
+    """
+    summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0,
+               "smart_ok": 0, "record_ok": 0}
+
+    logger.info("Loading Smart Matches list…")
+    smart_people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds)
+    logger.info(f"  {len(smart_people)} people with Smart Matches")
+
+    logger.info("Loading Record Matches list…")
+    record_people = await get_people_sorted_by_count(page, match_type=1, scroll_rounds=scroll_rounds)
+    logger.info(f"  {len(record_people)} people with Record Matches")
+
+    # Merge: combine counts, union of people
+    merged: dict[str, dict] = {}
+    for p in smart_people:
+        merged[p["id"]] = {"id": p["id"], "name": p["name"],
+                           "smart_count": p["count"], "record_count": 0}
+    for p in record_people:
+        if p["id"] in merged:
+            merged[p["id"]]["record_count"] = p["count"]
+        else:
+            merged[p["id"]] = {"id": p["id"], "name": p["name"],
+                               "smart_count": 0, "record_count": p["count"]}
+
+    people = sorted(merged.values(),
+                    key=lambda p: p["smart_count"] + p["record_count"], reverse=True)
+    logger.info(f"Total: {len(people)} unique people | top: {people[0]['name']} "
+                f"(SM:{people[0]['smart_count']} RM:{people[0]['record_count']})" if people else "")
+
+    for person in people:
+        if summary["processed"] >= max_matches:
+            logger.info(f"Session cap ({max_matches}) reached — stopping")
+            break
+
+        pid = person["id"]
+        logger.info(f"\n{'='*60}\n{person['name']} (SM:{person['smart_count']} RM:{person['record_count']})")
+
+        # --- Smart Matches first ---
+        if person["smart_count"] > 0:
+            sm_urls = await get_person_match_urls(page, pid, match_type=2)
+            for i, url in enumerate(sm_urls):
+                if summary["processed"] >= max_matches:
+                    break
+                result = await process_one_match(page, url)
+                status = result["status"]
+                summary["processed"] += 1
+                summary[status] = summary.get(status, 0) + 1
+                if status == "ok":
+                    summary["smart_ok"] += 1
+                logger.info(f"  SM [{i+1}/{len(sm_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+                if i < len(sm_urls) - 1:
+                    await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
+
+        # --- Record Matches second ---
+        if person["record_count"] > 0 and summary["processed"] < max_matches:
+            rm_urls = await get_person_match_urls(page, pid, match_type=1)
+            for i, url in enumerate(rm_urls):
+                if summary["processed"] >= max_matches:
+                    break
+                result = await process_one_match(page, url)
+                status = result["status"]
+                summary["processed"] += 1
+                summary[status] = summary.get(status, 0) + 1
+                if status == "ok":
+                    summary["record_ok"] += 1
+                logger.info(f"  RM [{i+1}/{len(rm_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+                if i < len(rm_urls) - 1:
+                    await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
+
+        summary["people"] += 1
         await _sleep(ACTION_DELAY_MIN, ACTION_DELAY_MAX)
 
     return summary

@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-06-23] update | Session 1 done (199/200 OK), session 2 live, auto-runner added
+
+**Object**: Combined SM+RM processing
+**Scenario**: live run
+**Outcome**: ✅ success
+
+**What happened**: Session 1 completed: 200 matches, 199 OK (108 SM + 91 RM), 6 people, 1 error (saveButton NOT_FOUND — fixed with fallback to saveAndNavigateTo). Session 2 launched with scroll=20: found 508 unique people, top person חיילה מלכה Kunshtadt קונשטאדט (SM:273 RM:274 = 547 total). Added `run_sessions.sh` bash auto-runner that chains sessions until exhaustion with 120-180s pause. Fixed saveButton fallback in `process_one_match`.
+
+**Code changes**: 19d6e46
+**Updated**: `browser/smart_matches.py`, `run_sessions.sh` (new)
+
+---
+
 ## [2026-06-23] update | Combined SM+RM session: largest-families-first with infinite-scroll sort
 
 **Object**: Smart Matches + Record Matches combined runner

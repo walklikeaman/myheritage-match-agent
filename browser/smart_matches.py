@@ -216,11 +216,18 @@ async def process_one_match(page: Page, match_url: str) -> dict:
     logger.debug(f"  Fields: {fields}")
 
     # --- Step 4: Save ---
-    save_res = await page.evaluate(
-        "(id) => { const b = document.getElementById(id); if(!b) return 'NOT_FOUND';"
-        " window.angular.element(b).triggerHandler('click'); return 'OK'; }",
-        "saveButton"
-    )
+    save_res = await page.evaluate("""
+        () => {
+            const b = document.getElementById('saveButton');
+            if (b) { window.angular.element(b).triggerHandler('click'); return 'OK'; }
+            // Fallback: Record Match wizard "Сохранить в дерево"
+            const rm = [...document.querySelectorAll('a,button,[ng-click]')]
+                .find(e => e.textContent.trim().startsWith('Сохранить в дерево') ||
+                           (e.getAttribute('ng-click')||'').includes('saveAndNavigateTo'));
+            if (rm) { window.angular.element(rm).triggerHandler('click'); return 'OK_RM'; }
+            return 'NOT_FOUND';
+        }
+    """)
     logger.debug(f"  Save click: {save_res}")
 
     if save_res == "NOT_FOUND":

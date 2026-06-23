@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-06-23] update | Add photo transfer + relatives expansion to wizard flow; update selectors wiki
+
+**Object**: Wizard automation — completeness improvement
+**Scenario**: refactor
+**Outcome**: ✅ success
+
+**What happened**: Live probe (3 scripts) confirmed wizard structure on 2026-06-23. Found two missing actions:
+1. **"Извлечь информацию еще об N родственниках"** — optional expansion link that adds more relatives beyond the main extraction. Now clicked after `extractAllInfoFromAllPeople()`.
+2. **`uploadPhoto()` elements** — 35+ per wizard page. Each click imports one photo from matched tree. Now clicked in a loop after field extraction.
+Also updated `wiki/concepts/selectors.md` from confidence=low/unverified to confidence=high with complete verified selector table covering all pages and Angular ng-click patterns. Deleted probe scripts.
+
+**Findings on "Перенести все"**: No single "accept all matches" button exists on the matches-for-person page. "Перенести все" in MyHeritage UX = "Извлечь всю информацию" (`extractAllInfoFromAllPeople()`) on the wizard — already implemented. Slowness is structural: 273 matches for one person = 273 separate wizard sessions × 35s each ≈ 2.7h for one person.
+
+**Code changes**: this commit — hash filled in.
+**Updated**: `browser/smart_matches.py`, `wiki/concepts/selectors.md`, `wiki/log.md`
+
+---
+
 ## [2026-06-23] update | Sessions 1+2 complete (399/400 OK); session 3 live
 
 **Object**: Combined SM+RM processing — cumulative totals

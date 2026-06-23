@@ -194,26 +194,56 @@ async def process_one_match(page: Page, match_url: str) -> dict:
             result["status"] = "skip"
             return result
 
-    # --- Step 3: Extract all info ---
+    # --- Step 3: Extract all info (text fields + relatives) ---
     await _sleep(2, 4)
     click_res = await page.evaluate(_CLICK_EXTRACT_ALL)
     logger.debug(f"  Extract click: {click_res}")
 
     if not click_res.get("clicked"):
         logger.warning("  No extract button found on wizard")
-        # Try to save anyway (might have 0 fields)
-        pass
     else:
         await _sleep(1.5, 3)
-        # Check that Angular model updated
         success = await page.evaluate(_CHECK_EXTRACT_SUCCESS)
         if not success and click_res.get("clicked") == "all":
             logger.warning("  Extract-all didn't toggle — retrying once")
             await page.evaluate(_CLICK_EXTRACT_ALL)
             await _sleep(2, 3)
 
+    # --- Step 3b: Expand additional relatives ("Извлечь информацию еще об N родственниках") ---
+    more_relatives = await page.evaluate("""
+        () => {
+            const btn = [...document.querySelectorAll('a,button,[ng-click],[class*="extract"]')]
+                .find(e => e.textContent.trim().startsWith('Извлечь информацию еще об'));
+            if (!btn) return null;
+            window.angular.element(btn).triggerHandler('click');
+            return btn.textContent.trim().substring(0, 60);
+        }
+    """)
+    if more_relatives:
+        logger.debug(f"  Relatives expansion: {more_relatives}")
+        await _sleep(2, 3)
+
     fields = await page.evaluate(_FIELD_COUNT)
     logger.debug(f"  Fields: {fields}")
+
+    # --- Step 3c: Transfer photos ---
+    photos_clicked = await page.evaluate("""
+        () => {
+            // uploadPhoto() divs on wizard = photos from the matched tree to import
+            const photos = [...document.querySelectorAll('[ng-click="uploadPhoto()"]')];
+            let clicked = 0;
+            for (const el of photos) {
+                try {
+                    window.angular.element(el).triggerHandler('click');
+                    clicked++;
+                } catch(e) {}
+            }
+            return clicked;
+        }
+    """)
+    if photos_clicked:
+        logger.debug(f"  Photos queued for transfer: {photos_clicked}")
+        await _sleep(1, 2)
 
     # --- Step 4: Save ---
     save_res = await page.evaluate("""
@@ -244,9 +274,11 @@ async def process_one_match(page: Page, match_url: str) -> dict:
     await _sleep(2, 4)
     confirmed = await page.evaluate(_IS_CONFIRMED)
     if confirmed:
-        logger.info(f"  ✓ Saved — {fields} fields")
+        photos_note = f" + {photos_clicked} photos" if photos_clicked else ""
+        logger.info(f"  ✓ Saved — {fields} fields{photos_note}")
         result["status"] = "ok"
         result["fields"] = fields
+        result["photos"] = photos_clicked
     else:
         logger.warning("  Save may not have completed (no 'подтверждено' text)")
         result["status"] = "error"

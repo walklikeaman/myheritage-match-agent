@@ -13,19 +13,19 @@ from pathlib import Path
 
 VIP_GROUPS = {
     "Ганущинер": [
-        r"[Гг]ану[щш][иi]н[еeё]р",        # Ганущинер, Ганушинер
-        r"[Гг]ану[щш][еe]н[еeё]р",         # Ганущенер
-        r"Ganu[sc]h?ch?in[eo]r",            # Ganushchiner, Ganuchinер
-        r"Hanu[sc]h?ch?in[eo]r",            # Hanushchiner
-        r"Ganu[sc]h?[ck]in",               # Ganuchin, Ganushin
+        r"[Гг]анн?у[щш][иi]н[еeё]р",      # Ганущинер / Ганнущинер (1 или 2 Н)
+        r"[Гг]анн?у[щш][еe]н[еeё]р",       # Ганущенер / Ганнущенер
+        r"Gann?u[sc]h?ch?in[eo]r",          # Ganushchiner / Gannushchiner
+        r"Hann?u[sc]h?ch?in[eo]r",          # Hanushchiner / Hannushchiner
+        r"Gann?u[sc]h?[ck]in",             # Ganuchin / Gannuchin
         r"גאנ[וו]?שינ",                    # Hebrew
     ],
     "Рассадина": [
-        r"[Рр]ассади[нн]?[аоыий]?",        # Рассадина, Рассадин, Рассадиной
-        r"[Рр]асади[нн]?[аоыий]?",         # Расадина (one С variant)
-        r"Rassadi[nн][aoiy]?",             # Rassadina, Rassadin
-        r"Rasadi[nн][aoiy]?",              # Rasadina
-        r"Расcаді[нн]",                    # Ukrainian spelling
+        r"[Рр][оo]сс?[аa]ди[нн]?[аоыий]?",  # Рассадина, Россадина, Росадина
+        r"[Рр]озс?[аa]ди[нн]?[аоыий]?",     # Розсадина (украинский)
+        r"[Рр]асс?[аa]ди[нн]?[аоыий]?",     # Расадина, Рассадина
+        r"R[oa]ss?adi[nн][aoiy]?",          # Rassadin(a), Rosadin(a), Rossadin(a)
+        r"Rozs?adi[nн][aoiy]?",             # Rozsadina
     ],
 }
 
@@ -53,5 +53,5 @@ if all_hits:
     print()
     sys.exit(1)
 else:
-    print("✓ No VIP ancestor hits (Ганущинер / Рассадина) in session logs.")
+    print("✓ No VIP ancestor hits (Ганущинер/Ганнущинер / Рассадина/Россадина/Росадина/Розсадина) in session logs.")
     sys.exit(0)

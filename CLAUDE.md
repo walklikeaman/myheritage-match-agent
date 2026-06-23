@@ -73,8 +73,8 @@ YAML frontmatter: `type / created / updated / sources` (required) + `confidence 
 If any confirmed match contains a **direct paternal/maternal ancestor** — send a PushNotification immediately and log the finding in `wiki/log.md`. Run `python3 notify_vip.py` after every session to check. Exit code 1 = hit found. Do NOT notify for collateral relatives — only direct line.
 
 VIP surnames (all variants tracked in `notify_vip.py`):
-- **Ганущинер** (one Н) — variants: Ганушинер, Ganushchiner, Hanushchiner, גאנושינר
-- **Рассадина / Рассадин** — прабабушка Maria Rassadina, мать деда Юрия Колонова; variants: Расадина, Rassadina, Rassadin
+- **Ганущинер / Ганнущинер** (1 или 2 Н — оба варианта) — variants: Ганушинер, Ganushchiner, Gannushchiner, Hanushchiner, גאנושינר
+- **Рассадина / Рассадин** — прабабушка Мария Рассадина, мать деда Юрия Колонова; variants: Россадина, Росадина, Розсадина, Rassadina, Rossadina, Rozsadina
 
 ## What NOT to do
 Never edit `Context/`. Never `git add -A`. Don't pre-create empty pages (born on first ingest). Don't duplicate across pages (cross-link instead). Don't bury domain knowledge in code comments — put it in wiki.

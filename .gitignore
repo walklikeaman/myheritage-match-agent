@@ -1,0 +1,39 @@
+# Secrets and session data — NEVER commit these
+.env
+data/
+logs/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Database
+*.db
+
+# Recon artifacts (local only)
+recon/
+
+# Graphify local state (committed output is in graphify-out/)
+graphify-out/manifest.json
+
+# Claude local state (commands + skills ARE committed)
+.claude/*
+!.claude/commands/
+!.claude/commands/**
+!.claude/skills/
+!.claude/skills/**
+!.claude/settings.json
+
+# Obsidian per-user state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.DS_Store
+
+# Probe scripts (throwaway — must not ship)
+_probe_*.py
+
+# Debug screenshots
+debug_*.png

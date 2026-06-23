@@ -1,0 +1,11 @@
+{
+  "showOrphans": true,
+  "nodeSizeMultiplier": 1.2,
+  "linkDistance": 200,
+  "search": "(path:wiki/concepts OR path:wiki/entities OR path:wiki/sources)",
+  "colorGroups": [
+    { "query": "path:wiki/concepts", "color": { "a": 1, "rgb": 6000639 } },
+    { "query": "path:wiki/entities", "color": { "a": 1, "rgb": 11032055 } },
+    { "query": "path:wiki/sources",  "color": { "a": 1, "rgb": 2278750 } }
+  ]
+}

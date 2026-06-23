@@ -1,0 +1,13 @@
+#!/bin/bash
+# Rebuild Graphify knowledge graph after each commit.
+# Skip during rebase/merge/cherry-pick to avoid noise.
+
+[ -f ".git/MERGE_HEAD" ] && exit 0
+[ -f ".git/rebase-merge/interactive" ] && exit 0
+[ -f ".git/CHERRY_PICK_HEAD" ] && exit 0
+
+if command -v graphify &>/dev/null; then
+    PYTHONHASHSEED=0 graphify build --output graphify-out/ --quiet &
+fi
+
+exit 0

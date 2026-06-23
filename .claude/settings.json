@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "echo '=== MyHeritage Agent Session ===' && echo \"Guardrails: $(grep -c '## Guardrail:' .loops/guardrails.md 2>/dev/null || echo 0) active\" && echo \"Log entries: $(grep -c '^## \\[' wiki/log.md 2>/dev/null || echo 0) total\" && git log --oneline -3 2>/dev/null || echo '(no git history yet)'"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "if [ -n \"$(git status --short 2>/dev/null)\" ]; then echo '⚠️  Uncommitted changes detected — run /ship before closing.'; fi"
+      }
+    ]
+  }
+}

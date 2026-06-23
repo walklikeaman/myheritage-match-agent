@@ -1,0 +1,17 @@
+{
+  "attachmentFolderPath": "Context/clipped",
+  "newLinkFormat": "relative",
+  "useMarkdownLinks": true,
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": [
+    "node_modules",
+    "venv",
+    ".venv",
+    "data",
+    "logs",
+    "recon",
+    "graphify-out",
+    ".claude/worktrees",
+    "__pycache__"
+  ]
+}

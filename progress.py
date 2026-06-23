@@ -51,7 +51,7 @@ REMAINING = max(0, TOTAL_PENDING - total_ok)
 avg_per_session = total_ok / total_sessions if total_sessions else 0
 # Estimated seconds per match with new delays: ~20s process + ~13s sleep avg
 secs_per_match = 33
-secs_per_session = 200 * secs_per_match
+secs_per_session = 500 * secs_per_match
 hours_remaining = REMAINING * secs_per_match / 3600
 
 print(f"""

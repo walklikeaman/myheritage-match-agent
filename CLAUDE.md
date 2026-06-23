@@ -64,7 +64,7 @@ YAML frontmatter: `type / created / updated / sources` (required) + `confidence 
 - **Never touch selectors in code without reading `wiki/concepts/selectors.md` first.**
 - **After any recon run, update `wiki/concepts/selectors.md`.**
 - **Never auto-save conflicting genealogy data** (name conflicts, date conflicts, relationship restructures) — flag for manual review.
-- **Max 200 matches per agent session.** (Safety guardrail.)
+- **Max 500 matches per agent session.** (Safety guardrail — raised from 200 after 539 clean runs, zero rate-limit events.)
 - **Probe scripts are `_probe_*.py`** — delete before commit; productize on 2nd repeat.
 - **Verify by re-reading reality** — never report success off stdout alone.
 - **Language: follow the source** — RU/EN both fine in wiki.

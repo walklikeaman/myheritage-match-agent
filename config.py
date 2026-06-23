@@ -27,7 +27,7 @@ MATCH_DELAY_MIN = 8.0
 MATCH_DELAY_MAX = 18.0
 
 # Session safety cap
-MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "200"))
+MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "500"))
 
 # Browser config
 VIEWPORT = {"width": 1440, "height": 900}

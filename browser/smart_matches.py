@@ -22,6 +22,8 @@ from config import (
     ACTION_DELAY_MAX,
     MATCH_DELAY_MIN,
     MATCH_DELAY_MAX,
+    PERSON_DELAY_MIN,
+    PERSON_DELAY_MAX,
 )
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
@@ -417,7 +419,7 @@ async def run_smart_matches_session(
                 await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
         summary["people"] += 1
-        await _sleep(ACTION_DELAY_MIN, ACTION_DELAY_MAX)
+        await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
 
     return summary
 
@@ -500,6 +502,6 @@ async def run_combined_session(
                     await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
         summary["people"] += 1
-        await _sleep(ACTION_DELAY_MIN, ACTION_DELAY_MAX)
+        await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
 
     return summary

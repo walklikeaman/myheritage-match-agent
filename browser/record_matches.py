@@ -18,7 +18,7 @@ import random
 from loguru import logger
 from playwright.async_api import Page
 
-from config import BASE_URL, ACTION_DELAY_MIN, ACTION_DELAY_MAX, MATCH_DELAY_MIN, MATCH_DELAY_MAX
+from config import BASE_URL, ACTION_DELAY_MIN, ACTION_DELAY_MAX, MATCH_DELAY_MIN, MATCH_DELAY_MAX, PERSON_DELAY_MIN, PERSON_DELAY_MAX
 from browser.smart_matches import process_one_match  # shared wizard logic
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
@@ -104,6 +104,6 @@ async def run_record_matches_session(
                 await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
         summary["people"] += 1
-        await _sleep(ACTION_DELAY_MIN, ACTION_DELAY_MAX)
+        await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
 
     return summary

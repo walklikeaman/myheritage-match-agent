@@ -19,22 +19,25 @@ SESSION_FILE = Path(os.getenv("SESSION_FILE", DATA_DIR / "myheritage_session.jso
 CONFIDENCE_THRESHOLD = int(os.getenv("CONFIDENCE_THRESHOLD", "80"))
 
 # Rate limiting (seconds)
-# Inter-action (within wizard): keep generous to avoid Angular race conditions
-ACTION_DELAY_MIN = 2.0
-ACTION_DELAY_MAX = 5.0
-# Inter-match: reduced after 399 confirmed matches with zero rate-limit signals
-MATCH_DELAY_MIN = 8.0
-MATCH_DELAY_MAX = 18.0
+# Inter-action (within wizard): generous to avoid Angular race conditions
+ACTION_DELAY_MIN = 3.0
+ACTION_DELAY_MAX = 9.0
+# Inter-match: human reads the result for 30-90 seconds before clicking next
+MATCH_DELAY_MIN = 30.0
+MATCH_DELAY_MAX = 90.0
+# Inter-person: pause between processing different people (2-5 min)
+PERSON_DELAY_MIN = 120.0
+PERSON_DELAY_MAX = 300.0
 
-# Session safety cap
-MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "500"))
+# Session safety cap — keep small so each session looks like a short human visit
+MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "30"))
 
-# Browser config
+# Browser config — viewport slight randomization happens at runtime
 VIEWPORT = {"width": 1440, "height": 900}
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
+    "Chrome/136.0.7103.114 Safari/537.36"
 )
 
 # MyHeritage URLs

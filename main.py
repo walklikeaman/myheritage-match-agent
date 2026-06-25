@@ -46,18 +46,52 @@ def _setup_logging(verbose: bool = False) -> None:
     )
 
 
+TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
+_DISCOVERY_URL = (
+    f"https://www.myheritage.com/discovery-hub/{TREE_ID}"
+    "/matches-by-people?matchType=2&matchStatus=32&lang=RU"
+)
+
+
 async def capture_session() -> None:
     from playwright.async_api import async_playwright
-    console.print("[bold yellow]Session capture mode[/bold yellow]")
-    console.print("A Chromium window will open. Log into MyHeritage, then come back.\n")
+    from auth.browser_auth import _STEALTH_SCRIPT, _EXTRA_HEADERS, _LAUNCH_ARGS, _randomized_viewport
+    from config import USER_AGENT
+
+    console.print("[bold yellow]Session capture mode — FRESH start (no old cookies)[/bold yellow]")
+    console.print(
+        "A Chromium window will open with a clean browser profile.\n"
+        "1. Log into MyHeritage (email + password).\n"
+        "2. Wait until the Smart Matches list is [bold]fully loaded[/bold] — people cards visible.\n"
+        "3. Come back here and press [bold]Enter[/bold].\n"
+    )
     async with async_playwright() as pw:
-        context = await create_browser_context(pw, headless=False)
+        # Start completely fresh — no existing cookies/session so WAF (Incapsula)
+        # issues fresh un-flagged tracking cookies for this headless fingerprint.
+        browser = await pw.chromium.launch(headless=False, args=_LAUNCH_ARGS)
+        context = await browser.new_context(
+            viewport=_randomized_viewport(),
+            user_agent=USER_AGENT,
+            locale="ru-RU",
+            timezone_id="Europe/Moscow",
+            extra_http_headers=_EXTRA_HEADERS,
+        )
+        await context.add_init_script(_STEALTH_SCRIPT)
+
         page = await context.new_page()
-        await page.goto("https://www.myheritage.com/my/account")
-        console.print("Press [bold]Enter[/bold] when you're logged in…")
+        await page.goto(_DISCOVERY_URL, wait_until="domcontentloaded", timeout=30000)
+        console.print(f"[dim]Opened: {page.url}[/dim]")
+        console.print("Press [bold]Enter[/bold] when the matches list is visible and you're logged in…")
         await asyncio.get_event_loop().run_in_executor(None, input)
-        is_auth = await validate_and_save_session(context)
-        console.print(f"[green]✓ Session saved[/green]" if is_auth else "[red]✗ Not authenticated[/red]")
+
+        final_url = page.url
+        if "discovery-hub" in final_url:
+            await context.storage_state(path=str(SESSION_FILE))
+            console.print(f"[green]✓ Session saved — matches page confirmed[/green]")
+        else:
+            console.print(f"[yellow]⚠ Still on: {final_url}[/yellow]")
+            console.print("Saving anyway — try running main.py to see if it works.")
+            await context.storage_state(path=str(SESSION_FILE))
         await context.close()
 
 

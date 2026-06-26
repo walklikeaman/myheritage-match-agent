@@ -4,6 +4,43 @@
 
 ---
 
+## [2026-06-27] incident | Postmortem: "saveButton not found" is an EXTRACT bug; set MAX=100
+
+**Object**: Smart-matches session throughput + the 747 "saveButton not found" errors
+**Scenario**: incident / rule-change
+**Outcome**: ✅ root cause found, mitigation shipped (MAX=100), code fix flagged for recon
+
+**What happened**: Overnight the auto-runner escalated MAX 30 → 100 → 150 → 200 → 250 → 300
+with randomized inter-session gaps. Throughput looked higher but the success rate
+collapsed: MAX=100 sessions ran ~98% OK (~98 confirmed), while MAX=250-300 ran ~33% OK
+with ~200 errors each. A four-lens postmortem (position-in-session, render-timing/code,
+throughput-economics, safety) over 14 finished sessions found:
+
+1. **Root cause is the EXTRACT step, not the save button.** All 751 "saveButton not found"
+   errors are downstream of `_CLICK_EXTRACT_ALL` returning `clicked:None` — the wizard's
+   extract control never appears in the DOM, so there is nothing to save. Counts line up
+   one-to-one (saveButton=751, "No extract button"=751, Fields:0=751).
+2. **Not browser aging.** Error rate is a step function (sticky "wizard-empty" plateau at
+   ~75% that flips on around match 25-43), not a ramp; working saves succeed to match ~298
+   in 3-hour sessions.
+3. **MAX=100 is the optimum** — the discovery-hub list only yields ~100 confirmable matches
+   per pass. MAX=300 bought +3 confirmed for +400 errors. Escalation was net-negative.
+4. **Safety verdict: efficiency bug, not detection.** Zero throttling/captcha/auth signals;
+   account stayed logged in and accepted 2,346 saves all day. The "429/403" grep hits were
+   Python line numbers and timestamps. No PushNotification warranted.
+
+Shipped now: `config.py` MAX default 30→100 (+ rationale comment); runner switched to
+fixed MAX=100; new concept page `session-economics.md`; `selectors.md` flags the extract
+control as SUSPECT (re-derive before editing); `rate-limiting.md` reconciled to real
+delays (8-18s/15-30s, was 15-45s/120-300s) and the MAX=100 vs 500-ceiling distinction.
+Deferred: the `browser/smart_matches.py` poll-and-retry fix needs a live recon to confirm
+whether the extract selector is stale — flagged as a follow-up task.
+
+**Code changes**: this commit — c50c531.
+**Updated**: `config.py`, `wiki/concepts/session-economics.md` (new), `wiki/concepts/selectors.md`, `wiki/concepts/rate-limiting.md`, `wiki/index.md`, `wiki/log.md`, `.obsidian/`
+
+---
+
 ## [2026-06-23] update | Speed: reduce inter-match delay 30s→13s avg; add progress.py + auto-runner
 
 **Object**: Session throughput optimization

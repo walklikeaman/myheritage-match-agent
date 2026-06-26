@@ -1,9 +1,9 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-06-23
-sources: [agent-briefing, live-probe-2026-06-23]
-confidence: high
+updated: 2026-06-27
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26]
+confidence: high (extract-all control SUSPECT — see warning below)
 status: active
 relates_to: [smart-matches, record-matches, data-extraction]
 staleness_window: 30d
@@ -63,6 +63,16 @@ URL: `/research/collection-1/семейные-деревья-myheritage?action=s
 | Single-field sign | `[class*="extract_record_row_copied_all_sign"]` | Shown when only 1 field exists |
 
 **ng-click response pattern**: Always use `window.angular.element(el).triggerHandler('click')` — native `.click()` and `dispatchEvent` don't update Angular model state.
+
+> ⚠️ **SUSPECT (2026-06-27): the extract-all control may be stale or locale-dependent.**
+> The 2026-06-26 postmortem traced 751 "saveButton not found" failures to the *extract*
+> step, not the save step: `_CLICK_EXTRACT_ALL` returned `{clicked: None}` (none of its
+> three selectors — the `extractAllInfoFromAllPeople()` text node, the
+> `extract_record_row_copied_all_sign` class, or the RM `saveAndNavigateTo` link — matched
+> the DOM). It flips on early in long sessions and stays sticky. **Re-derive these three
+> selectors against live DOM before editing extract code.** See
+> [session-economics](session-economics.md) for the full analysis and the recommended
+> poll-and-retry fix.
 
 ### Success indicators
 

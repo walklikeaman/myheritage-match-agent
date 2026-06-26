@@ -1,14 +1,65 @@
 {
+  "collapse-filter": true,
+  "search": "(path:wiki/people OR path:wiki/concepts OR path:wiki/entities OR path:wiki/sources) -file:_index",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
   "showOrphans": false,
-  "nodeSizeMultiplier": 1.4,
-  "linkDistance": 180,
-  "search": "(path:wiki/people OR path:wiki/concepts OR path:wiki/entities OR path:wiki/sources)",
+  "collapse-color-groups": true,
   "colorGroups": [
-    { "query": "tag:direct-ancestor",  "color": { "a": 1, "rgb": 16744448 } },
-    { "query": "tag:vip-lineage",      "color": { "a": 1, "rgb": 16776960 } },
-    { "query": "tag:root",             "color": { "a": 1, "rgb": 5832479  } },
-    { "query": "path:wiki/concepts",   "color": { "a": 1, "rgb": 6000639  } },
-    { "query": "path:wiki/entities",   "color": { "a": 1, "rgb": 11032055 } },
-    { "query": "path:wiki/sources",    "color": { "a": 1, "rgb": 2278750  } }
-  ]
+    {
+      "query": "tag:direct-ancestor",
+      "color": {
+        "a": 1,
+        "rgb": 16744448
+      }
+    },
+    {
+      "query": "tag:vip-lineage",
+      "color": {
+        "a": 1,
+        "rgb": 16776960
+      }
+    },
+    {
+      "query": "tag:root",
+      "color": {
+        "a": 1,
+        "rgb": 5832479
+      }
+    },
+    {
+      "query": "path:wiki/concepts",
+      "color": {
+        "a": 1,
+        "rgb": 6000639
+      }
+    },
+    {
+      "query": "path:wiki/entities",
+      "color": {
+        "a": 1,
+        "rgb": 11032055
+      }
+    },
+    {
+      "query": "path:wiki/sources",
+      "color": {
+        "a": 1,
+        "rgb": 2278750
+      }
+    }
+  ],
+  "collapse-display": true,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.4,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 180,
+  "scale": 0.691911325996932,
+  "close": false
 }

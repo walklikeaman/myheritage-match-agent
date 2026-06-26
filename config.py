@@ -22,15 +22,18 @@ CONFIDENCE_THRESHOLD = int(os.getenv("CONFIDENCE_THRESHOLD", "80"))
 # Inter-action (within wizard): generous to avoid Angular race conditions
 ACTION_DELAY_MIN = 3.0
 ACTION_DELAY_MAX = 9.0
-# Inter-match: human reads the result for 30-90 seconds before clicking next
-MATCH_DELAY_MIN = 30.0
-MATCH_DELAY_MAX = 90.0
-# Inter-person: pause between processing different people (2-5 min)
-PERSON_DELAY_MIN = 120.0
-PERSON_DELAY_MAX = 300.0
+# Inter-match: short enough that macOS doesn't kill the headless Chromium process
+MATCH_DELAY_MIN = 8.0
+MATCH_DELAY_MAX = 18.0
+# Inter-person: short enough to keep Chromium alive between people
+PERSON_DELAY_MIN = 15.0
+PERSON_DELAY_MAX = 30.0
 
-# Session safety cap — keep small so each session looks like a short human visit
-MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "30"))
+# Session cap. 100 is the efficiency optimum: the discovery-hub list only surfaces
+# ~100 confirmable matches per pass, so larger caps add error volume, not confirmed
+# saves (2026-06-26 postmortem: MAX=300 bought +3 confirmed for +400 errors).
+# 500 remains the hard safety ceiling in CLAUDE.md. See wiki/concepts/session-economics.md.
+MAX_MATCHES_PER_SESSION = int(os.getenv("MAX_MATCHES_PER_SESSION", "100"))
 
 # Browser config — viewport slight randomization happens at runtime
 VIEWPORT = {"width": 1440, "height": 900}

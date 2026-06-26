@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-06-23
-sources: [agent-briefing]
+updated: 2026-06-27
+sources: [agent-briefing, postmortem-2026-06-26]
 confidence: high
 status: active
 relates_to: [myheritage, browser-auth, agent-architecture]
@@ -16,19 +16,32 @@ tags: [anti-detection, safety, core]
 
 ## Delay parameters (in `config.py`)
 
-| Parameter | Value | Where used |
+| Parameter | Value (current) | Where used |
 |-----------|-------|-----------|
-| `ACTION_DELAY_MIN/MAX` | 2–6 seconds | Between individual UI actions (click, type, scroll) |
-| `MATCH_DELAY_MIN/MAX` | 15–45 seconds | Between finishing one match and starting the next |
-| `MAX_MATCHES_PER_SESSION` | 200 | Hard cap — stop after this many, regardless of queue |
+| `ACTION_DELAY_MIN/MAX` | 3–9 seconds | Between individual UI actions (click, type, scroll) |
+| `MATCH_DELAY_MIN/MAX` | 8–18 seconds | Between finishing one match and starting the next |
+| `PERSON_DELAY_MIN/MAX` | 15–30 seconds | Between processing different people |
+| `MAX_MATCHES_PER_SESSION` | 100 (efficiency optimum) / 500 (hard safety ceiling) | See note below |
+
+> **2026-06-27 — delays were shortened (was 15–45s match / 120–300s person) and verified safe.**
+> macOS was killing the headless Chromium during the long sleeps, so they were cut to
+> 8–18s / 15–30s. A full day of runs (2,346 saves) showed **zero** throttling, captcha,
+> or auth signals — the pacing is not what MyHeritage watches. Do not lengthen them to
+> "fix" the wizard errors; that is a client-side render bug, not rate limiting. See
+> [session-economics](session-economics.md).
 
 **Why random ranges?** Fixed delays are trivially detectable as bot patterns. Random delays within human-plausible ranges look organic.
 
 ## Session management
-- Process at most 200-300 matches per day total across all sessions
-- After hitting the session cap, stop. Don't restart immediately.
-- Spread sessions across hours, not back-to-back
-- Avoid peak hours if possible (when MyHeritage likely has higher monitoring traffic)
+- **Use `MAX=100` per session** — the discovery-hub list only surfaces ~100 confirmable
+  matches per pass, so larger caps add error volume, not confirmed saves. The 500 cap in
+  CLAUDE.md is a *safety* ceiling, not a target. Full reasoning: [session-economics](session-economics.md).
+- The MAX guardrail is an **efficiency** lever, not a detection safeguard — the 2026-06-26
+  postmortem found no server-side throttling at any MAX up to 300.
+- After hitting the session cap, pause. The runner uses randomized inter-session gaps
+  (40–150 min, off the hour) rather than back-to-back restarts.
+- Spread sessions across hours; keep each session short (OK% degrades with wall-clock
+  session length far more than with the per-action delay).
 
 ## Playwright settings
 - `headless=False` for initial runs (harder to detect than headless)

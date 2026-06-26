@@ -4,6 +4,29 @@
 
 ---
 
+## [2026-06-27] verify | reCAPTCHA fix confirmed live; runner restarted + self-throttling
+
+**Object**: Production validation of the circuit-breaker fix
+**Scenario**: verification
+**Outcome**: ✅ fix works end-to-end; account currently WAF-flagged; runner self-throttling
+
+**What happened**: Restarted the runner (screen `3133`) from `main` (fix 710af0f). First
+session ([session_auto_20260627_014440](../../logs/)): 3 matches saved cleanly (73 / 57 /
+40 fields), then match 4 hit a reCAPTCHA challenge → status `blocked` → session aborted
+after 4 matches with a `captcha` token. The runner's backoff grep caught it → now in ~2h
+backoff. This confirms two things: (a) the fix behaves exactly as designed in production,
+and (b) the account is **actively WAF-flagged right now**. Only **1** confirmed-but-empty
+match this session (the post-confirm challenge) vs ~53/100 before the fix. The runner is
+now self-throttling — it retries every ~2h, grabs a handful of matches until it hits a
+challenge, backs off each time, and will naturally speed up as the reCAPTCHA reputation
+decays. Independent corroboration: a poll-retry probe recovered 0 of 7 failures (a render
+race would recover some), matching the bot-challenge root cause.
+
+**Code changes**: none (operational verification).
+**Updated**: `wiki/log.md`
+
+---
+
 ## [2026-06-27] fix | Root cause = reCAPTCHA WAF challenge, not a render bug; circuit breaker shipped
 
 **Object**: "saveButton not found" / "empty wizard" extract failures

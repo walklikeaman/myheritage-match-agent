@@ -8,7 +8,7 @@
 
 **Object**: "saveButton not found" / "empty wizard" extract failures
 **Scenario**: live recon + root-cause fix
-**Outcome**: ✅ fixed + verified (0 errors); runner stays DOWN until fix reaches `main`
+**Outcome**: ✅ fixed + verified (0 errors); committed to `main` (710af0f); runner stopped, safe to restart
 
 **What happened**: Two live headless probes (reusing `data/myheritage_session.json`, run in
 the gap after the 00:11 session ended) settled the root cause. The "empty wizard" failures
@@ -33,10 +33,12 @@ error plateau). Corrected [selectors](concepts/selectors.md) (cleared SUSPECT, d
 bot-challenge) and [session-economics](concepts/session-economics.md) (the "not throttling"
 verdict was wrong). Probes deleted.
 
-**Runner status**: the autonomous `screen` runner is **stopped** (torn down during recon). It
-runs `main.py` from the **`main` checkout**, which does not yet have this fix — do NOT restart
-it until the branch `claude/keen-buck-155ab8` is merged to `main` and the main checkout pulls.
-Restart command: `screen -dmS myheritage bash /tmp/mh_runner_v3.sh`.
+**Runner status**: the autonomous `screen` runner is **stopped** (torn down during recon).
+The fix is committed directly on `main` (710af0f) and the main checkout is clean at that
+commit, so restarting runs the fixed code. Restart: `screen -dmS myheritage bash
+/tmp/mh_runner_v3.sh`. Caveat: the WAF was flagged during recon, so the first session after
+restart will likely hit a challenge and trigger the 2h backoff — consider waiting ~1h for the
+reCAPTCHA reputation to cool first.
 
 **Code changes**: `browser/smart_matches.py`, `main.py` (commit `710af0f`)
 **Updated**: `wiki/log.md`, `wiki/concepts/selectors.md`, `wiki/concepts/session-economics.md`

@@ -38,7 +38,7 @@ runs `main.py` from the **`main` checkout**, which does not yet have this fix â€
 it until the branch `claude/keen-buck-155ab8` is merged to `main` and the main checkout pulls.
 Restart command: `screen -dmS myheritage bash /tmp/mh_runner_v3.sh`.
 
-**Code changes**: `browser/smart_matches.py`, `main.py` (commit `<hash>`)
+**Code changes**: `browser/smart_matches.py`, `main.py` (commit `710af0f`)
 **Updated**: `wiki/log.md`, `wiki/concepts/selectors.md`, `wiki/concepts/session-economics.md`
 
 ---

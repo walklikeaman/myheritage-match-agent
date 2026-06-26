@@ -11,6 +11,7 @@ Flow per match:
 
 import asyncio
 import random
+import time
 from typing import Optional
 
 from loguru import logger
@@ -118,9 +119,82 @@ _FIELD_COUNT = "() => document.querySelectorAll('input[type=\"checkbox\"]').leng
 
 _IS_CONFIRMED = "() => document.body.innerText.includes('подтверждено')"
 
+# WAF bot-challenge served IN PLACE OF a page (HTTP 200, ~578-char body, no Angular).
+# Recon 2026-06-27: MyHeritage FraudProtection serves a Google reCAPTCHA Enterprise
+# challenge ("/FP/recaptcha-challenge.php" iframe + "докажите, что Вы человек" body)
+# when the session is flagged. This is the true cause of the old "saveButton not found"
+# mass failures. See wiki/concepts/selectors.md and wiki/concepts/session-economics.md.
+_IS_BOT_CHALLENGE = """
+() => {
+    if (document.querySelector('iframe[src*="recaptcha-challenge.php"]')) return true;
+    const body = document.body.innerText || '';
+    return body.length < 3000 &&
+        /Вы\\s*-?\\s*робот|докажите, что Вы человек|prove you are human|that you are human/i.test(body);
+}
+"""
+
+# Any of the three extract-control variants is present (mirror of _CLICK_EXTRACT_ALL's
+# find conditions, without clicking) — used to poll for the wizard to finish rendering.
+_HAS_EXTRACT_CONTROL = """
+() => {
+    const txt = (e) => (e.textContent || '').trim();
+    if ([...document.querySelectorAll('*')]
+            .some(e => e.children.length === 0 && txt(e) === 'Извлечь всю информацию')) return true;
+    if (document.querySelector('[class*="extract_record_row_copied_all_sign"]')) return true;
+    return [...document.querySelectorAll('a,button,[ng-click]')]
+        .some(e => txt(e).startsWith('Сохранить в дерево') ||
+                   ((e.getAttribute('ng-click') || '').includes('saveAndNavigateTo')));
+}
+"""
+
+# Click the final save (id=saveButton) or the Record-Match fallback; poll-friendly.
+_SAVE_CLICK = """
+() => {
+    const b = document.getElementById('saveButton');
+    if (b) { window.angular.element(b).triggerHandler('click'); return 'OK'; }
+    const rm = [...document.querySelectorAll('a,button,[ng-click]')]
+        .find(e => e.textContent.trim().startsWith('Сохранить в дерево') ||
+                   (e.getAttribute('ng-click')||'').includes('saveAndNavigateTo'));
+    if (rm) { window.angular.element(rm).triggerHandler('click'); return 'OK_RM'; }
+    return 'NOT_FOUND';
+}
+"""
+
 
 async def _sleep(lo: float, hi: float) -> None:
     await asyncio.sleep(random.uniform(lo, hi))
+
+
+async def _await_wizard_ready(page: Page, timeout: float = 10.0, interval: float = 0.7) -> str:
+    """
+    Poll the post-confirm wizard. Angular renders the extract control client-side, so a
+    single immediate read races the paint. Returns one of:
+      'control'   — an extract control is present, safe to click
+      'challenge' — a reCAPTCHA bot-challenge was served instead of the wizard
+      'empty'     — neither appeared within the timeout
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if await page.evaluate(_IS_BOT_CHALLENGE):
+            return "challenge"
+        if await page.evaluate(_HAS_EXTRACT_CONTROL):
+            return "control"
+        if time.monotonic() >= deadline:
+            return "empty"
+        await asyncio.sleep(interval)
+
+
+async def _poll_save_click(page: Page, timeout: float = 10.0, interval: float = 0.7) -> str:
+    """Angular can re-render the save button after extract; poll up to ~timeout before NOT_FOUND."""
+    deadline = time.monotonic() + timeout
+    res = "NOT_FOUND"
+    while True:
+        res = await page.evaluate(_SAVE_CLICK)
+        if res != "NOT_FOUND":
+            return res
+        if time.monotonic() >= deadline:
+            return res
+        await asyncio.sleep(interval)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +223,13 @@ async def process_one_match(page: Page, match_url: str) -> dict:
     if await page.evaluate(_IS_CONFIRMED):
         logger.info("  Already confirmed — skipping")
         result["status"] = "skip"
+        return result
+
+    # WAF may serve the reCAPTCHA challenge on the compare page itself — bail BEFORE
+    # confirming, so we don't consume a match we can't enrich.
+    if await page.evaluate(_IS_BOT_CHALLENGE):
+        logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
+        result["status"] = "blocked"
         return result
 
     # --- Step 2: Click confirm button ---
@@ -198,18 +279,34 @@ async def process_one_match(page: Page, match_url: str) -> dict:
 
     # --- Step 3: Extract all info (text fields + relatives) ---
     await _sleep(2, 4)
+    # Poll for the wizard to render. This both fixes the Angular paint race (a single
+    # read was firing before the control existed) AND catches the reCAPTCHA bot-challenge
+    # the WAF serves in place of the wizard when the session is flagged.
+    wizard_state = await _await_wizard_ready(page, timeout=10.0)
+    if wizard_state == "challenge":
+        # The match was confirmed in Step 2, but the wizard is walled off by reCAPTCHA.
+        # Continuing would confirm more matches without enriching them, so stop the
+        # session and let the runner's backoff kick in.
+        logger.error("  reCAPTCHA bot-challenge instead of wizard (captcha) — blocking session")
+        result["status"] = "blocked"
+        return result
+    if wizard_state == "empty":
+        logger.warning("  Wizard rendered no extract control after 10s — skipping (wizard-empty)")
+        result["status"] = "skip"
+        return result
+
     click_res = await page.evaluate(_CLICK_EXTRACT_ALL)
     logger.debug(f"  Extract click: {click_res}")
-
     if not click_res.get("clicked"):
-        logger.warning("  No extract button found on wizard")
-    else:
-        await _sleep(1.5, 3)
-        success = await page.evaluate(_CHECK_EXTRACT_SUCCESS)
-        if not success and click_res.get("clicked") == "all":
-            logger.warning("  Extract-all didn't toggle — retrying once")
-            await page.evaluate(_CLICK_EXTRACT_ALL)
-            await _sleep(2, 3)
+        logger.warning("  Extract control vanished before click — skipping (wizard-empty)")
+        result["status"] = "skip"
+        return result
+    await _sleep(1.5, 3)
+    success = await page.evaluate(_CHECK_EXTRACT_SUCCESS)
+    if not success and click_res.get("clicked") == "all":
+        logger.warning("  Extract-all didn't toggle — retrying once")
+        await page.evaluate(_CLICK_EXTRACT_ALL)
+        await _sleep(2, 3)
 
     # --- Step 3b: Expand additional relatives ("Извлечь информацию еще об N родственниках") ---
     more_relatives = await page.evaluate("""
@@ -227,6 +324,12 @@ async def process_one_match(page: Page, match_url: str) -> dict:
 
     fields = await page.evaluate(_FIELD_COUNT)
     logger.debug(f"  Fields: {fields}")
+    # A populated Smart-Match wizard always yields checkboxes; 0 means it never really
+    # rendered (the RM 'rm_save' path legitimately has none, so exclude it). Don't save.
+    if fields == 0 and click_res.get("clicked") in ("all", "single"):
+        logger.warning("  Wizard populated 0 fields — skipping (wizard-empty)")
+        result["status"] = "skip"
+        return result
 
     # --- Step 3c: Transfer photos ---
     photos_clicked = await page.evaluate("""
@@ -247,23 +350,14 @@ async def process_one_match(page: Page, match_url: str) -> dict:
         logger.debug(f"  Photos queued for transfer: {photos_clicked}")
         await _sleep(1, 2)
 
-    # --- Step 4: Save ---
-    save_res = await page.evaluate("""
-        () => {
-            const b = document.getElementById('saveButton');
-            if (b) { window.angular.element(b).triggerHandler('click'); return 'OK'; }
-            // Fallback: Record Match wizard "Сохранить в дерево"
-            const rm = [...document.querySelectorAll('a,button,[ng-click]')]
-                .find(e => e.textContent.trim().startsWith('Сохранить в дерево') ||
-                           (e.getAttribute('ng-click')||'').includes('saveAndNavigateTo'));
-            if (rm) { window.angular.element(rm).triggerHandler('click'); return 'OK_RM'; }
-            return 'NOT_FOUND';
-        }
-    """)
+    # --- Step 4: Save (poll — Angular may re-render the button after extract) ---
+    save_res = await _poll_save_click(page, timeout=10.0)
     logger.debug(f"  Save click: {save_res}")
 
     if save_res == "NOT_FOUND":
-        logger.error("  saveButton not found")
+        # A wizard rendered and extracted, yet no save button after a 10s poll — a genuine
+        # anomaly now (the mass reCAPTCHA failures are caught upstream as 'blocked').
+        logger.error("  saveButton not found after 10s poll")
         result["status"] = "error"
         return result
 
@@ -415,6 +509,13 @@ async def run_smart_matches_session(
             summary["processed"] += 1
             summary[status] = summary.get(status, 0) + 1
             logger.info(f"  [{i+1}/{len(match_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+            if status == "blocked":
+                # Circuit breaker: a reCAPTCHA challenge means the WAF has flagged us.
+                # Stop now (every further confirm would consume a match without enriching
+                # it) and emit a 'captcha' token so the auto-runner applies its long backoff.
+                summary["aborted"] = "captcha"
+                logger.error(f"reCAPTCHA challenge (captcha) — aborting session after {summary['processed']} matches to back off")
+                return summary
             if i < len(match_urls) - 1:
                 await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
@@ -482,6 +583,10 @@ async def run_combined_session(
                 if status == "ok":
                     summary["smart_ok"] += 1
                 logger.info(f"  SM [{i+1}/{len(sm_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+                if status == "blocked":
+                    summary["aborted"] = "captcha"
+                    logger.error(f"reCAPTCHA challenge (captcha) — aborting session after {summary['processed']} matches to back off")
+                    return summary
                 if i < len(sm_urls) - 1:
                     await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
@@ -498,6 +603,10 @@ async def run_combined_session(
                 if status == "ok":
                     summary["record_ok"] += 1
                 logger.info(f"  RM [{i+1}/{len(rm_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+                if status == "blocked":
+                    summary["aborted"] = "captcha"
+                    logger.error(f"reCAPTCHA challenge (captcha) — aborting session after {summary['processed']} matches to back off")
+                    return summary
                 if i < len(rm_urls) - 1:
                     await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 

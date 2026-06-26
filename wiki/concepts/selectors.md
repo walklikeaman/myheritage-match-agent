@@ -2,8 +2,8 @@
 type: concept
 created: 2026-06-23
 updated: 2026-06-27
-sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26]
-confidence: high (extract-all control SUSPECT — see warning below)
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27]
+confidence: high
 status: active
 relates_to: [smart-matches, record-matches, data-extraction]
 staleness_window: 30d
@@ -64,15 +64,38 @@ URL: `/research/collection-1/семейные-деревья-myheritage?action=s
 
 **ng-click response pattern**: Always use `window.angular.element(el).triggerHandler('click')` — native `.click()` and `dispatchEvent` don't update Angular model state.
 
-> ⚠️ **SUSPECT (2026-06-27): the extract-all control may be stale or locale-dependent.**
-> The 2026-06-26 postmortem traced 751 "saveButton not found" failures to the *extract*
-> step, not the save step: `_CLICK_EXTRACT_ALL` returned `{clicked: None}` (none of its
-> three selectors — the `extractAllInfoFromAllPeople()` text node, the
-> `extract_record_row_copied_all_sign` class, or the RM `saveAndNavigateTo` link — matched
-> the DOM). It flips on early in long sessions and stays sticky. **Re-derive these three
-> selectors against live DOM before editing extract code.** See
-> [session-economics](session-economics.md) for the full analysis and the recommended
-> poll-and-retry fix.
+> ✅ **RESOLVED (2026-06-27, live recon): the extract-all selectors are NOT stale.**
+> Live headless probes confirmed the documented controls render correctly — real wizards
+> show the `Извлечь всю информацию` text node, 46-54 field checkboxes, and a working
+> `saveButton`. The 751 "saveButton not found" failures were never a selector problem:
+> `_CLICK_EXTRACT_ALL` returned `{clicked: None}` because the WAF served a **reCAPTCHA
+> bot-challenge in place of the wizard** (see "Bot-challenge interstitial" below). The agent
+> now polls for the control before reading, and classifies a challenge as `blocked` (abort +
+> back off) instead of pressing on to a doomed save. See
+> [session-economics](session-economics.md) for the corrected root-cause analysis.
+
+### Bot-challenge interstitial (reCAPTCHA Enterprise) — 2026-06-27
+
+When MyHeritage FraudProtection flags the session it serves a Google reCAPTCHA Enterprise
+challenge **in place of** the requested page — as **HTTP 200**, not a 4xx/5xx, which is why
+log greps for `429|503|captcha` never caught it. This is the real cause of the old
+"saveButton not found" mass failures.
+
+| Signal | Value on a challenge page |
+|--------|---------------------------|
+| Challenge iframe | `iframe[src*="recaptcha-challenge.php"]` (`/FP/recaptcha-challenge.php`) |
+| Body text (RU) | `возможно, Вы - робот … докажите, что Вы человек` |
+| Body length | ~578 chars (real wizard: 17k-33k) |
+| Angular app | absent (`[ng-app]`/`[ng-controller]` count = 0) |
+| Page title | generic `Nakonechnyi Web Site - MyHeritage` |
+
+Detection lives in `_IS_BOT_CHALLENGE` (`browser/smart_matches.py`): the
+`recaptcha-challenge.php` iframe, OR a <3000-char body containing the "Вы человек / докажите"
+/ "prove you are human" phrases. A reload does **not** clear it; nor does a 25s backoff +
+re-nav within the same session. The agent treats it as a **circuit breaker** — status
+`blocked`, abort the session, emit a `captcha` log token so the auto-runner applies its long
+backoff. **Do not click "Продолжить" / attempt the checkbox** — backing off is the safe
+response.
 
 ### Success indicators
 

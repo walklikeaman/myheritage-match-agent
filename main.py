@@ -135,6 +135,8 @@ async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int) -
         table.add_row("  · Record Matches", str(summary.get("record_ok", 0)))
     table.add_row("⚠ Skipped", str(summary.get("skip", 0)))
     table.add_row("✗ Errors", str(summary.get("error", 0)))
+    if summary.get("aborted"):
+        table.add_row("⛔ Blocked (reCAPTCHA)", str(summary.get("blocked", 0)))
     console.print(table)
 
 

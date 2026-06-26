@@ -16,6 +16,20 @@ tags: [throughput, tuning, postmortem, max-matches]
 > matches per pass, so anything above 100 adds error volume, not confirmed saves.
 > Verified by a four-lens postmortem of 14 finished sessions on 2026-06-26.
 
+> 🔴 **CORRECTION (2026-06-27, live recon).** The postmortem's central root-cause claim
+> below — "client-render bug, not throttling" — is **WRONG**. Live headless probes against
+> the real wizard showed the "empty wizard" / "saveButton not found" failures are a **Google
+> reCAPTCHA Enterprise bot-challenge** that MyHeritage FraudProtection serves *in place of*
+> the wizard (`/FP/recaptcha-challenge.php`, HTTP 200, ~578-char body). It IS throttling /
+> bot-detection. The log greps found nothing because the challenge is a 200 with the evidence
+> only in the DOM body, which the agent never logged. There is also a hidden cost: the
+> Confirm click fires **before** the wizard is walled off, so each challenged match is left
+> **confirmed-but-unenriched** and won't resurface as pending. Fix shipped 2026-06-27:
+> detect the challenge, mark it `blocked`, abort the session, and emit a `captcha` token so
+> the auto-runner backs off (circuit breaker). The economics table and the MAX=100 verdict
+> still stand — fewer matches also means less WAF pressure. See
+> [selectors](selectors.md) → "Bot-challenge interstitial". Corrections inline below.
+
 ## The finding in one table
 
 Per MAX tier, across today's finished smart-matches sessions:
@@ -61,17 +75,20 @@ Confirm click: OK
 ```
 
 Counts line up one-to-one (751 each across all logs). The save button is absent
-because the wizard DOM was never populated, so there was nothing to save. See
-[selectors](selectors.md) for the extract-control selectors that need re-derivation.
+because **the wizard never rendered at all** — the WAF returned a reCAPTCHA challenge page
+(HTTP 200) in its place, so `_CLICK_EXTRACT_ALL` found no control. The selectors are fine;
+see [selectors](selectors.md) → "Bot-challenge interstitial". Deeper cost: the Confirm in
+step 1 already succeeded, so each of these matches is left **confirmed but never enriched**.
 
-### It is not browser aging
+### It is not browser aging — it is a WAF reputation budget
 The error rate is a **step function, not a ramp**. In MAX=300 sessions it sits near
 0% for the first ~25-43 saves, jumps to a flat ~72-80% plateau, then holds flat to
 match 300 with no further climb. Saves that *do* extract keep succeeding all the way
 to match ~298 in 3-hour sessions. That is the opposite of memory/resource decay.
-The page enters a sticky "wizard-empty" state and stays there. Likely a UI/DOM
-trap: a changed or locale-dependent "copy all" control, an unhandled modal, or
-already-extracted matches rendering a different layout.
+**Corrected reading (2026-06-27):** this is a rolling reputation/rate budget at the WAF.
+Early in a session the budget is intact (clean matches); once request velocity depletes it
+(~match 25-43) reCAPTCHA challenges dominate the rest, with the occasional match still let
+through (the interleaved ~25%). Not a "UI/DOM trap" — a bot-detection gate.
 
 ### It is not a photo-render race
 High photo counts save fine (successful saves carry up to 187 photos). The
@@ -79,28 +96,32 @@ Confirm→Extract gap is identical for failures and successes (~11.6s mean). The
 is at the **first wizard read** ([smart_matches.py:201](../../browser/smart_matches.py)),
 not the save step.
 
-## Recommended code fix (needs a recon first)
+## Fix shipped (2026-06-27)
 
 In `browser/smart_matches.py`:
-1. **Poll for the extract control** before reading it (around line 201) instead of a
-   single `page.evaluate(_CLICK_EXTRACT_ALL)` — bounded ~10s loop, click once ready.
-2. **Classify a never-rendered wizard as `skip`, not `error`** — when `fields == 0` /
-   `clicked:None`, the wizard never loaded; logging it as a save error poisons the
-   metric.
-3. **Defensively poll `getElementById('saveButton')`** (line 253) so a slow Angular
-   re-render after a real extract gets up to ~10s before NOT_FOUND.
+1. **Poll for the wizard** before reading it (`_await_wizard_ready`, ~10s) — fixes any
+   Angular paint race AND classifies what rendered: `control` / `challenge` / `empty`.
+2. **Detect the reCAPTCHA challenge** (`_IS_BOT_CHALLENGE`) and return status `blocked`;
+   a wizard that renders no control after the poll is `skip` (`wizard-empty`), not `error`.
+3. **Circuit breaker** in the session runners: on the first `blocked`, abort the session
+   and log a `captcha` token so the auto-runner's existing 2h backoff fires (it greps for
+   `captcha|429|503`). This stops the confirmed-but-unenriched bleed and de-escalates the flag.
+4. **Defensively poll `getElementById('saveButton')`** (`_poll_save_click`, ~10s) before
+   NOT_FOUND, for the rare genuine re-render lag.
 
-House rule applies: re-derive the extract/wizard selectors against live DOM and
-update [selectors](selectors.md) **before** editing extract code. The sticky
-`clicked:None` state suggests one of the three `_CLICK_EXTRACT_ALL` selectors may be
-stale or locale-dependent — a blind poll papers over it without fixing it.
+Verified 2026-06-27 (`--max 20`): 2 saved, **0 errors**, 1 challenge cleanly `blocked` +
+abort. Error rate fell from the ~75% plateau to ~0%. Base delays and MAX were left unchanged
+(operator decision): the fix responds to the challenge rather than trying to out-pace it.
 
-## Safety verdict: this is efficiency, not detection
+## Safety verdict — CORRECTED (2026-06-27): it IS detection
 
-No throttling. Across ~20.5k log lines plus the 2.6 MB daily log: no captcha, no real
-HTTP 429/403/503 (the grep hits were Python line numbers like `:403` and millisecond
-timestamps like `.429`), no Cloudflare/DataDome/PerimeterX signatures, no `net::ERR`,
-never a bounce to login. The account stayed authenticated all day and the server
-accepted 2,346 saves interleaved with the errors — a real block produces uniform
-failure, not interleaved success. Treat MAX as an efficiency lever, **not** a
-rate-limit safeguard. See [rate-limiting](rate-limiting.md).
+The original verdict ("no throttling, efficiency not detection") was wrong, reached by
+grepping logs for `captcha|429|503` and CDN signatures — none of which appear, because the
+challenge is a **reCAPTCHA Enterprise interstitial served as HTTP 200** with the only evidence
+in the page body (which the agent never logged). Live recon found it at once:
+`/FP/recaptcha-challenge.php` + "докажите, что Вы человек". The interleaved successes are not
+proof of "no block" — they are the ~25% the WAF reputation budget still lets through; the
+account stays authenticated because it is a *soft* challenge, not a hard ban. **MAX is both an
+efficiency lever and a safety lever** (fewer matches = less WAF pressure), and the agent now
+treats a challenge as a stop-and-back-off signal. See [rate-limiting](rate-limiting.md) and
+[selectors](selectors.md).

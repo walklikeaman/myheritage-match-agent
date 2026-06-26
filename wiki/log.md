@@ -4,6 +4,45 @@
 
 ---
 
+## [2026-06-27] fix | Root cause = reCAPTCHA WAF challenge, not a render bug; circuit breaker shipped
+
+**Object**: "saveButton not found" / "empty wizard" extract failures
+**Scenario**: live recon + root-cause fix
+**Outcome**: ✅ fixed + verified (0 errors); runner stays DOWN until fix reaches `main`
+
+**What happened**: Two live headless probes (reusing `data/myheritage_session.json`, run in
+the gap after the 00:11 session ended) settled the root cause. The "empty wizard" failures
+are **not** a render bug and **not** a stale selector — the documented `Извлечь всю информацию`
+control renders fine (real wizards show 46-54 field checkboxes, body 17k-33k chars). On the
+failing matches the WAF serves a **Google reCAPTCHA Enterprise challenge in place of the
+wizard**: `iframe[src*="/FP/recaptcha-challenge.php"]`, body "возможно, Вы - робот … докажите,
+что Вы человек", ~578 chars, no Angular, HTTP 200. That HTTP-200-with-body-evidence is exactly
+why the 2026-06-26 postmortem's `grep captcha|429|503` found nothing and wrongly concluded
+"not throttling." A reload does not clear it; a 25s backoff + re-nav stays blocked. Confirmed
+the data-loss path the prior entry suspected: Confirm fires *before* the wizard is walled off,
+so a challenged match is left **confirmed-but-unenriched** (~75% of a plateaued session).
+
+**Action**: With operator approval (circuit-breaker, keep pacing), implemented in
+[smart_matches.py](../../browser/smart_matches.py): poll for the wizard
+(`_await_wizard_ready`) classifying render as control/challenge/empty; detect the challenge
+(`_IS_BOT_CHALLENGE`) → status `blocked`; on first `blocked` **abort the session** and log a
+`captcha` token so the runner's existing 2h backoff fires; `skip` (not `error`) for an empty
+wizard or 0 fields; defensive `saveButton` poll. Base delays + MAX unchanged. Verified with a
+real `--max 20` run: 2 saved, **0 errors**, 1 challenge cleanly blocked + abort (was a ~75%
+error plateau). Corrected [selectors](concepts/selectors.md) (cleared SUSPECT, documented the
+bot-challenge) and [session-economics](concepts/session-economics.md) (the "not throttling"
+verdict was wrong). Probes deleted.
+
+**Runner status**: the autonomous `screen` runner is **stopped** (torn down during recon). It
+runs `main.py` from the **`main` checkout**, which does not yet have this fix — do NOT restart
+it until the branch `claude/keen-buck-155ab8` is merged to `main` and the main checkout pulls.
+Restart command: `screen -dmS myheritage bash /tmp/mh_runner_v3.sh`.
+
+**Code changes**: `browser/smart_matches.py`, `main.py` (commit `<hash>`)
+**Updated**: `wiki/log.md`, `wiki/concepts/selectors.md`, `wiki/concepts/session-economics.md`
+
+---
+
 ## [2026-06-27] incident | Extract bug worsened — MAX=100 ran 14% OK; runner PAUSED
 
 **Object**: Smart-matches extract failure — escalation to a data-quality stop

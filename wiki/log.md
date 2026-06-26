@@ -36,7 +36,7 @@ delays (8-18s/15-30s, was 15-45s/120-300s) and the MAX=100 vs 500-ceiling distin
 Deferred: the `browser/smart_matches.py` poll-and-retry fix needs a live recon to confirm
 whether the extract selector is stale — flagged as a follow-up task.
 
-**Code changes**: this commit — c50c531.
+**Code changes**: commit 7ad64e6.
 **Updated**: `config.py`, `wiki/concepts/session-economics.md` (new), `wiki/concepts/selectors.md`, `wiki/concepts/rate-limiting.md`, `wiki/index.md`, `wiki/log.md`, `.obsidian/`
 
 ---

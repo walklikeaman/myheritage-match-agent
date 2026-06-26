@@ -4,6 +4,36 @@
 
 ---
 
+## [2026-06-27] incident | Extract bug worsened — MAX=100 ran 14% OK; runner PAUSED
+
+**Object**: Smart-matches extract failure — escalation to a data-quality stop
+**Scenario**: incident
+**Outcome**: ⚠️ runner paused pending the extract-selector fix
+
+**What happened**: The first full MAX=100 session after the postmortem (00:11) ran only
+**14% OK** (14 saved / 53 errors / 33 skips of 100). MAX=100 did NOT help — the extract
+bug now bites from match 2, not match 25-43, and the OK% is *worse* than the daytime
+MAX=300 runs. This points to a genuine MyHeritage wizard DOM change rolling out over
+calendar time, not a session-length effect.
+
+Worse, confirmed the data-quality impact: in `process_one_match`
+([smart_matches.py:156](../../browser/smart_matches.py)) the "Подтвердить совпадение"
+click commits the match server-side BEFORE the extract step. So every extract error =
+a match confirmed on MyHeritage with **0 fields/photos** transferred, and once confirmed
+it leaves the pending queue (`matchStatus=32`) — our automation won't revisit it. At 14%
+OK each session was confirming ~53 matches/100 without extracting their data (recoverable
+later via the confirmed-matches view, but not by the current pending-queue pass).
+
+**Action**: PAUSED the runner (killed screen `87432` + session) to stop creating
+confirmed-but-empty matches. The extract-selector recon+fix (see [session-economics](concepts/session-economics.md))
+is now the critical path, not a deferral. Resume only after the fix lands and a test
+session shows OK% back near the clean baseline.
+
+**Code changes**: none (operational + diagnosis).
+**Updated**: `wiki/log.md`
+
+---
+
 ## [2026-06-27] incident | Postmortem: "saveButton not found" is an EXTRACT bug; set MAX=100
 
 **Object**: Smart-matches session throughput + the 747 "saveButton not found" errors

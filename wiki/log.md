@@ -4,6 +4,31 @@
 
 ---
 
+## [2026-07-08] fix | Runner backoff grep false-positive on `429`/`503` inside person IDs
+
+**Object**: `/tmp/mh_runner_v3.sh` auto-runner backoff logic
+**Scenario**: bugfix (operational script, not repo-tracked)
+**Outcome**: ✅ fixed and runner restarted
+
+**What happened**: A perfectly clean session (99/100 confirmed, 0 errors, no reCAPTCHA)
+still triggered the runner's 2h captcha backoff. Root cause: the backoff grep
+`captcha\|429\|503` matched the substring `429` inside a MyHeritage internal person ID
+(`5515429`) that appeared in the log, not an actual rate-limit signal. Confirmed via
+`grep -n "reCAPTCHA\|HTTP 429\|HTTP 503"` in `browser/smart_matches.py` that the codebase
+never logs bare HTTP status codes — the circuit breaker only ever emits the literal token
+`captcha`. Narrowed the grep to `captcha` only, killed and relaunched the runner
+(new screen PIDs 98347/98349/98350) so the fake 2h wait doesn't cost throughput. This
+likely explains some of the shorter-than-expected clean run lengths seen over the past
+few days' monitoring (any session touching a person/match ID containing `429` or `503`
+would false-trigger a 2h stall).
+
+**Code changes**: `6f5634b` (wiki docs only — the actual fix lives in `/tmp/mh_runner_v3.sh`,
+which is ephemeral and gets recreated from this session's memory whenever macOS wipes `/tmp`).
+See [session-economics](concepts/session-economics.md) → "Fixed (2026-07-08)".
+**Updated**: `wiki/concepts/session-economics.md`, `wiki/log.md`
+
+---
+
 ## [2026-06-27] verify | reCAPTCHA fix confirmed live; runner restarted + self-throttling
 
 **Object**: Production validation of the circuit-breaker fix

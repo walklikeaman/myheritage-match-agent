@@ -125,3 +125,16 @@ account stays authenticated because it is a *soft* challenge, not a hard ban. **
 efficiency lever and a safety lever** (fewer matches = less WAF pressure), and the agent now
 treats a challenge as a stop-and-back-off signal. See [rate-limiting](rate-limiting.md) and
 [selectors](selectors.md).
+
+## Fixed (2026-07-08): runner backoff grep false-positive on `429`/`503`
+
+The auto-runner's backoff check (`grep -q "captcha\|429\|503" "$LOG"`) matched **substrings
+inside MyHeritage internal IDs**, not just real signals — a person ID like `5515429` contains
+the literal digits `429`. A session that finished 99/100 confirmed with zero errors and zero
+reCAPTCHA challenges still tripped the 2h captcha backoff because its log happened to contain
+an ID ending in 429. The codebase never actually emits bare `429`/`503` — the circuit breaker
+(`browser/smart_matches.py`) only ever logs the literal token `captcha` inside `(captcha)` when
+a real reCAPTCHA challenge is detected (see "Bot-challenge interstitial" in
+[selectors](selectors.md)). Fixed by narrowing the grep to `captcha` only — no HTTP status
+codes ever appear in this Playwright-driven log format, so the `429`/`503` checks were pure
+false-positive risk with no matching real signal to protect against.

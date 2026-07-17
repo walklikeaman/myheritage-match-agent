@@ -119,14 +119,22 @@ _FIELD_COUNT = "() => document.querySelectorAll('input[type=\"checkbox\"]').leng
 
 _IS_CONFIRMED = "() => document.body.innerText.includes('подтверждено')"
 
-# WAF bot-challenge served IN PLACE OF a page (HTTP 200, ~578-char body, no Angular).
+# WAF bot-challenge served IN PLACE OF a page (HTTP 200, no Angular render).
 # Recon 2026-06-27: MyHeritage FraudProtection serves a Google reCAPTCHA Enterprise
-# challenge ("/FP/recaptcha-challenge.php" iframe + "докажите, что Вы человек" body)
-# when the session is flagged. This is the true cause of the old "saveButton not found"
-# mass failures. See wiki/concepts/selectors.md and wiki/concepts/session-economics.md.
+# challenge ("/FP/recaptcha-challenge.php" iframe + "докажите, что Вы человек" body,
+# ~578 chars) when the session is flagged. This is the true cause of the old
+# "saveButton not found" mass failures. See wiki/concepts/selectors.md and
+# wiki/concepts/session-economics.md.
+# Recon 2026-07-17: a second, distinct WAF vendor was also observed serving the same
+# in-place-of-wizard block — Imperva Incapsula ("_Incapsula_Resource" iframe, 0-char
+# body, 0 Angular nodes, ~886-byte HTML). Neither the recaptcha selector nor the
+# body-text regex matches it, so it was falling through to the "empty" (skip) path
+# instead of "challenge" (blocked) — silently confirming matches with zero enrichment
+# and never triggering the runner's backoff. See session-economics.md for the fix.
 _IS_BOT_CHALLENGE = """
 () => {
     if (document.querySelector('iframe[src*="recaptcha-challenge.php"]')) return true;
+    if (document.querySelector('iframe[src*="_Incapsula_Resource"]')) return true;
     const body = document.body.innerText || '';
     return body.length < 3000 &&
         /Вы\\s*-?\\s*робот|докажите, что Вы человек|prove you are human|that you are human/i.test(body);

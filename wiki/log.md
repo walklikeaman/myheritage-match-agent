@@ -4,6 +4,33 @@
 
 ---
 
+## [2026-07-17] fix | Second undetected WAF vendor (Imperva Incapsula) causing silent 0%-yield sessions
+
+**Object**: `_IS_BOT_CHALLENGE` in `browser/smart_matches.py`
+**Scenario**: bugfix, root-cause via live recon
+**Outcome**: ✅ fixed and verified live; runner stopped mid-burn, restarted after fix
+
+**What happened**: Noticed a session at 0 OK / 84 SKIP across 7 different people — every
+single match "wizard-empty" with zero successes. Stopped the runner immediately (it was
+confirming matches without enriching them, at 100% failure, with no backoff since "empty"
+isn't the circuit-breaker path). Probed live: an initial check against just-confirmed match
+URLs showed "match no longer exists" (expected — those had already been confirmed by our own
+Step 2 before the wizard failed, so revisiting them post-hoc is a dead end). Re-probed
+correctly with a fresh, never-confirmed match and full diagnostics (iframe list, body length,
+HTML length, Angular node count) and found a **second bot-challenge vendor**: Imperva
+Incapsula (`iframe[src*="_Incapsula_Resource"]`, 0-char body, ~886-byte HTML, 0 Angular
+nodes) — completely different signature from the documented Google reCAPTCHA Enterprise
+challenge, so neither existing check matched it. Added the Incapsula iframe selector to
+`_IS_BOT_CHALLENGE` and verified live: the same scenario (confirm → poll wizard) now returns
+`status: 'blocked'` instead of `'empty'`, correctly triggering the abort + `captcha`-token
+backoff. Runner restarted after the fix landed. See
+[selectors](concepts/selectors.md) → "Second WAF vendor: Imperva Incapsula".
+
+**Code changes**: `fa62484` — `browser/smart_matches.py` (`_IS_BOT_CHALLENGE` selector).
+**Updated**: `wiki/concepts/selectors.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-08] fix | Runner backoff grep false-positive on `429`/`503` inside person IDs
 
 **Object**: `/tmp/mh_runner_v3.sh` auto-runner backoff logic

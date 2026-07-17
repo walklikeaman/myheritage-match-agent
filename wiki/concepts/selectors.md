@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-06-27
-sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27]
+updated: 2026-07-17
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17]
 confidence: high
 status: active
 relates_to: [smart-matches, record-matches, data-extraction]
@@ -96,6 +96,35 @@ re-nav within the same session. The agent treats it as a **circuit breaker** —
 `blocked`, abort the session, emit a `captcha` log token so the auto-runner applies its long
 backoff. **Do not click "Продолжить" / attempt the checkbox** — backing off is the safe
 response.
+
+### Second WAF vendor: Imperva Incapsula — 2026-07-17
+
+Live recon during a session that showed 0 OK / 84+ SKIP across 7 different people (every
+single match "wizard-empty") found a **second, distinct** bot-challenge, served by **Imperva
+Incapsula**, not Google reCAPTCHA:
+
+| Signal | Value |
+|--------|-------|
+| Challenge iframe | `iframe[src*="_Incapsula_Resource"]` (query params `SWUDNSAI`, `incident_id`, `cinfo`, `rpinfo`) |
+| Body text | **empty** (0 chars) |
+| HTML length | ~886 bytes |
+| Angular app | absent (0 `[ng-app]`/`[ng-controller]` nodes) |
+| URL | still the real `showExtractWizard` URL — only the response body is swapped |
+
+Neither the old recaptcha-iframe selector nor the "докажите, что Вы человек" body-text regex
+matches this variant, so `_await_wizard_ready` fell through to `'empty'` (skip) instead of
+`'challenge'` (blocked) — the confirm-then-fail-to-enrich bleed the original fix was meant to
+prevent, except this time **the runner never backs off**, so it burns through every match for
+every person in the session at 0% yield. Fixed by adding the Incapsula iframe selector to
+`_IS_BOT_CHALLENGE` (`browser/smart_matches.py`) — same circuit-breaker path as the reCAPTCHA
+case. Verified live: a fresh confirmed match now returns `status: 'blocked'` immediately
+instead of `'empty'` after the 10s poll.
+
+**Takeaway**: MyHeritage's FraudProtection appears to rotate between at least two WAF
+vendors. Any future "wizard-empty at scale, 0% success across multiple people" symptom should
+be treated as a probable **third undetected challenge variant** — probe live with a fresh
+unconfirmed match, dump `iframe` src list + body length + HTML length, and extend
+`_IS_BOT_CHALLENGE` rather than assuming it's a render race or a stale-list issue.
 
 ### Success indicators
 

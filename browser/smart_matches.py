@@ -10,8 +10,10 @@ Flow per match:
 """
 
 import asyncio
+import json
 import random
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
@@ -25,6 +27,7 @@ from config import (
     MATCH_DELAY_MAX,
     PERSON_DELAY_MIN,
     PERSON_DELAY_MAX,
+    GRAPH_UPDATES_FILE,
 )
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
@@ -118,6 +121,61 @@ _CHECK_EXTRACT_SUCCESS = """
 _FIELD_COUNT = "() => document.querySelectorAll('input[type=\"checkbox\"]').length"
 
 _IS_CONFIRMED = "() => document.body.innerText.includes('подтверждено')"
+
+# Local graph accumulation (2026-07-18): the wizard's navigator sidebar lists every
+# person this extraction touches (the main match plus any expanded relatives), each
+# with a name and its relation to the main person. Recon on a live wizard confirmed
+# `li.individual_navigator_item` (class `main_true`/`main_false`) + `.individual_full_name`
+# + `.individual_relationship`. Combined with the raw `.extract_record_row` text (which
+# carries Имя/Фамилия/Рождение/Смерть/Родители etc. per person in DOM order), this is
+# enough to accumulate a local graph incrementally without a manual GEDCOM re-export —
+# see `graph_accumulate.py` for how these get merged and VIP-scanned.
+_NAVIGATOR_PEOPLE = """
+() => [...document.querySelectorAll('li.individual_navigator_item')].map(li => ({
+    main: li.className.includes('main_true'),
+    name: (li.querySelector('.individual_full_name') || {}).textContent?.trim() || null,
+    relation: (li.querySelector('.individual_relationship') || {}).textContent?.trim() || null,
+}))
+"""
+
+_EXTRACT_ROWS_TEXT = """
+() => [...document.querySelectorAll('.extract_record_row')]
+    .map(r => r.innerText.trim())
+    .filter(t => t)
+    .join('\\n===ROW===\\n')
+"""
+
+
+async def _capture_graph_snapshot(page: Page, match_url: str) -> Optional[dict]:
+    """
+    Best-effort scrape of the wizard's navigator (name + relation-to-main per person)
+    and the raw extract-row text, appended to GRAPH_UPDATES_FILE for later offline
+    accumulation into the local family graph. Never raises — a capture failure must
+    never affect the real confirm/extract/save flow.
+    """
+    try:
+        navigator = await page.evaluate(_NAVIGATOR_PEOPLE)
+        raw_text = await page.evaluate(_EXTRACT_ROWS_TEXT)
+        if not navigator and not raw_text:
+            return None
+        return {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "match_url": match_url,
+            "navigator": navigator,
+            "raw_text": raw_text[:20000],
+        }
+    except Exception as e:
+        logger.debug(f"  Graph capture skipped: {e}")
+        return None
+
+
+def _append_graph_update(record: dict) -> None:
+    """Append-only write — one JSON object per line. Never raises."""
+    try:
+        with open(GRAPH_UPDATES_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logger.debug(f"  Graph update write skipped: {e}")
 
 # WAF bot-challenge served IN PLACE OF a page (HTTP 200, no Angular render).
 # Recon 2026-06-27: MyHeritage FraudProtection serves a Google reCAPTCHA Enterprise
@@ -338,6 +396,11 @@ async def process_one_match(page: Page, match_url: str) -> dict:
         logger.warning("  Wizard populated 0 fields — skipping (wizard-empty)")
         result["status"] = "skip"
         return result
+
+    # --- Step 3b2: Capture graph snapshot for local accumulation (best-effort) ---
+    snapshot = await _capture_graph_snapshot(page, match_url)
+    if snapshot:
+        _append_graph_update(snapshot)
 
     # --- Step 3c: Transfer photos ---
     photos_clicked = await page.evaluate("""

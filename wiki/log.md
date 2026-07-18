@@ -4,6 +4,38 @@
 
 ---
 
+## [2026-07-18] update | Incremental local graph accumulation — no more manual GEDCOM re-export
+
+**Object**: `data/family_graph.json` freshness
+**Scenario**: feature (operator request)
+**Outcome**: ✅ built and verified live end-to-end
+
+**What happened**: Operator asked why the local graph doesn't reflect the ~9,000+ new
+confirmed matches, and said manually re-exporting a fresh GEDCOM every time is too much
+of a chore — asked the agent to accumulate the graph on its own instead. Recon on a live
+wizard found `li.individual_navigator_item` (name + relation-to-match-person per person
+in the wizard) and `.extract_record_row` (all structured fields as plain text, DOM
+order) as stable, low-risk capture points. Added `_capture_graph_snapshot` /
+`_append_graph_update` to `browser/smart_matches.py` — runs once per successful match,
+wrapped so a capture failure can never affect the real save flow — appending to the new
+`data/graph_updates.jsonl`. Built `graph_accumulate.py` to merge those into
+`family_graph.json`'s new `harvested_people` key, additive-only, never touching the
+GEDCOM-derived `ancestors`/`vip_hits`. Extended `notify_vip.py` to also scan
+`graph_updates.jsonl`. Verified the full pipeline live against a real, previously
+unconfirmed match (Torild Blot-Sven Totilsson Kol family, 3 people) — capture, merge,
+and VIP scan all worked cleanly. Important caveat documented: harvested relations are
+relative to the matched person, not to Nikita, so harvested VIP hits are NOT
+generation-verified the way GEDCOM-based `vip_hits` are — they need manual review, per
+the project's direct-line-only alert rule. See
+[graph-accumulation](concepts/graph-accumulation.md) for the full design and the
+generation-depth limitation.
+
+**Code changes**: `6b9a2c8` — `browser/smart_matches.py`, `config.py`,
+`graph_accumulate.py` (new), `notify_vip.py`.
+**Updated**: `wiki/concepts/graph-accumulation.md` (new), `wiki/index.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-17] fix | Second undetected WAF vendor (Imperva Incapsula) causing silent 0%-yield sessions
 
 **Object**: `_IS_BOT_CHALLENGE` in `browser/smart_matches.py`

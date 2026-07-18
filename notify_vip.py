@@ -1,11 +1,16 @@
 """
-Scan session logs for VIP ancestor surnames and print findings.
-Run after every session. Exit code 1 if VIP hits found (for shell alerting).
+Scan session logs AND the live-captured graph_updates.jsonl for VIP ancestor
+surnames and print findings. Run after every session. Exit code 1 if VIP hits
+found (for shell alerting).
 
 VIP lineages:
   1. Ганущинер (one Н) — direct ancestor line, all spelling variants
   2. Рассадина / Рассадин — great-grandmother Maria Rassadina,
      mother of grandfather Yury Kolonov
+
+Note: a hit here (including one from graph_updates.jsonl) only means the surname
+appeared somewhere in a processed match — it is NOT generation-verified as direct
+line. Treat every hit as "needs manual review," per the project's VIP alert rule.
 """
 import re
 import sys
@@ -29,16 +34,18 @@ VIP_GROUPS = {
 }
 
 LOGS = sorted(Path("logs").glob("session_*.log"))
+GRAPH_UPDATES = Path("data/graph_updates.jsonl")
+SCAN_FILES = LOGS + ([GRAPH_UPDATES] if GRAPH_UPDATES.exists() else [])
 
 all_hits = {}  # group -> list of (fname, lineno, line)
 for group, patterns in VIP_GROUPS.items():
     combined = re.compile("|".join(patterns), re.IGNORECASE)
     hits = []
-    for log in LOGS:
-        text = log.read_text(errors="ignore")
+    for src in SCAN_FILES:
+        text = src.read_text(errors="ignore")
         for lineno, line in enumerate(text.splitlines(), 1):
             if combined.search(line):
-                hits.append((log.name, lineno, line.strip()))
+                hits.append((src.name, lineno, line.strip()[:200]))
     if hits:
         all_hits[group] = hits
 
@@ -52,5 +59,6 @@ if all_hits:
     print()
     sys.exit(1)
 else:
-    print("✓ No VIP ancestor hits (Ганущинер/Ганнущинер / Рассадина/Россадина/Росадина/Розсадина) in session logs.")
+    print("✓ No VIP ancestor hits (Ганущинер/Ганнущинер / Рассадина/Россадина/Росадина/Розсадина) "
+          "in session logs or graph_updates.jsonl.")
     sys.exit(0)

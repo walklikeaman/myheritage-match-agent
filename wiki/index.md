@@ -25,6 +25,7 @@
 | [agent-architecture](concepts/agent-architecture.md) | Hybrid API+Playwright design, module map, phase plan | active |
 | [selectors](concepts/selectors.md) | CSS selectors for MyHeritage UI — MUST recon before use | 30d |
 | [session-economics](concepts/session-economics.md) | Why MAX=100; the extract-step root cause of "saveButton not found"; safety verdict | 60d |
+| [graph-accumulation](concepts/graph-accumulation.md) | Incremental local family-graph capture during confirmation, no manual GEDCOM re-export needed; generation-depth limitation | 60d |
 
 ## Status
 - **Phase 1**: `auth/browser_auth.py` + `recon.py` + `storage/db.py` ✅

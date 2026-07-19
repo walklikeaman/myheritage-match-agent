@@ -1,7 +1,7 @@
 ---
 type: concept
 created: 2026-07-18
-updated: 2026-07-18
+updated: 2026-07-19
 sources: [live-recon-2026-07-18]
 confidence: medium
 status: active
@@ -87,3 +87,24 @@ existing `ancestors`/`vip_hits` →`notify_vip.py` ran clean (no VIP hit, exit 0
 `main.py` invocation (regardless of clean/crash/captcha exit), before applying the
 backoff. Output goes to the same session log. See [selectors](selectors.md) for the
 wizard-state polling this builds on.
+
+**Note (2026-07-18):** `/tmp/mh_runner_v3.sh` is ephemeral — macOS wipes `/tmp` on
+restart, and this runner integration line has to be re-added by hand from this doc
+every time the script gets recreated. It's been missed at least once already; when
+recreating the runner, always diff against this section first.
+
+## Fixed: notify_vip.py self-matching its own "no hits" message
+
+Once the runner started appending `notify_vip.py`'s stdout into the same session log
+it scans on the *next* run, the script began matching its own prior output — its "no
+hits" message spells out the tracked surnames verbatim ("Ганущинер/Ганнущинер /
+Рассадина/..."), which is exactly what its own regexes are built to catch. Every
+future session would have printed a false `🔴 VIP ANCESTOR ALERT` forever, purely from
+re-reading its own prior success message. Same root cause as the `429`/`503`
+substring-match bug in the old runner backoff grep (see
+[session-economics](session-economics.md)): a detector matching noise it generated
+itself rather than genuine signal. Fixed by filtering out any line containing the
+stable marker phrase `"vip ancestor hit"` (case-insensitive) before applying the
+surname regexes — covers the historical already-polluted log lines too, not just
+future output, since it matches on content rather than a new marker that would only
+appear going forward.

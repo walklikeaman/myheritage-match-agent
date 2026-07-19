@@ -4,6 +4,37 @@
 
 ---
 
+## [2026-07-19] fix | notify_vip.py false-triggered on its own "no hits" log line
+
+**Object**: `notify_vip.py` VIP surname scan
+**Scenario**: bugfix, found while re-wiring `/tmp/mh_runner_v3.sh` after a `/tmp` wipe
+**Outcome**: ✅ fixed and verified; ephemeral runner script re-synced with graph-accumulation.md
+
+**What happened**: Recreating `/tmp/mh_runner_v3.sh` from scratch after another macOS
+`/tmp` wipe, I found it was missing the `graph_accumulate.py` + `notify_vip.py`
+integration documented in [graph-accumulation](concepts/graph-accumulation.md) (that
+feature — already shipped in `22d3e8d` earlier — never made it into the ephemeral
+runner script's actual running instance because the wipe hit before I'd re-added it).
+Re-added both calls, then ran `notify_vip.py` manually to process the backlog and hit
+a **false** `🔴 VIP ANCESTOR ALERT — 2 hit(s)`. The "hits" were the script's own prior
+"✓ No VIP ancestor hits (Ганущинер/... / Рассадина/...)" success line, which had been
+appended into a session log by the runner and then re-scanned as if it were extracted
+genealogy data — the message spells out the exact surnames its own regexes hunt for.
+Same failure shape as the `429`/`503` runner-backoff false-positive from 2026-07-08:
+a detector matching noise it produced itself. Fixed by filtering out any line
+containing `"vip ancestor hit"` before applying the surname regexes. Verified: exit 0,
+clean, no false alarm.
+
+Also ran `graph_accumulate.py` on the session that was live when I stopped the runner
+for probing: 10 records → 151 harvested people total (41 new). No genuine VIP hits.
+
+**Code changes**: `notify_vip.py` (self-output filter). `/tmp/mh_runner_v3.sh`
+re-synced with the graph-accumulate + notify-vip integration (ephemeral, not
+repo-tracked — see graph-accumulation.md's new "ephemeral runner" note).
+**Updated**: `wiki/concepts/graph-accumulation.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-18] update | Incremental local graph accumulation — no more manual GEDCOM re-export
 
 **Object**: `data/family_graph.json` freshness

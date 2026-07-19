@@ -37,6 +37,14 @@ LOGS = sorted(Path("logs").glob("session_*.log"))
 GRAPH_UPDATES = Path("data/graph_updates.jsonl")
 SCAN_FILES = LOGS + ([GRAPH_UPDATES] if GRAPH_UPDATES.exists() else [])
 
+# The runner appends this script's own stdout into the same session logs it scans
+# next time round. Its own status lines spell out the tracked surnames verbatim
+# ("No VIP ancestor hits (Ганущинер/... / Рассадина/...)"), so without this guard the
+# script would match its own prior "no hits" message forever, every single run.
+# "VIP ancestor hit" is a stable marker distinct from any real extracted genealogy
+# text — filter it out before regex-matching, regardless of message wording changes.
+SELF_OUTPUT_MARKER = "vip ancestor hit"
+
 all_hits = {}  # group -> list of (fname, lineno, line)
 for group, patterns in VIP_GROUPS.items():
     combined = re.compile("|".join(patterns), re.IGNORECASE)
@@ -44,6 +52,8 @@ for group, patterns in VIP_GROUPS.items():
     for src in SCAN_FILES:
         text = src.read_text(errors="ignore")
         for lineno, line in enumerate(text.splitlines(), 1):
+            if SELF_OUTPUT_MARKER in line.lower():
+                continue
             if combined.search(line):
                 hits.append((src.name, lineno, line.strip()[:200]))
     if hits:

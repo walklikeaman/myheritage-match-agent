@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-06-27
-sources: [agent-briefing, postmortem-2026-06-26]
+updated: 2026-07-22
+sources: [agent-briefing, postmortem-2026-06-26, live-note-2026-07-22]
 confidence: high
 status: active
 relates_to: [myheritage, browser-auth, agent-architecture]
@@ -58,3 +58,25 @@ tags: [anti-detection, safety, core]
 
 ## Implementation
 Rate limiting delays are inserted by callers in `browser/smart_matches.py` and `browser/record_matches.py` using `random.uniform()` with the config values. Never hardcode delay values — always pull from `config.py`.
+
+## Observed: an unusually long WAF flag (2026-07-21 evening → 2026-07-22)
+
+Normal pattern (weeks of monitoring): a session runs 50-100 clean matches, hits a
+reCAPTCHA/Incapsula challenge, backs off 2h, and the *next* session usually runs clean
+again — the flag rarely survives more than one or two 2h cycles.
+
+Starting the evening of 2026-07-21, the account instead hit the challenge on the
+**very first match** of nine consecutive sessions in a row, spanning roughly 19 hours
+with zero new confirms. Circuit breaker behaved correctly every time (detect → abort →
+2h backoff) — this was not a code bug, just an exceptionally persistent flag. Best
+guess: the live UI investigation earlier that day (see
+[graph-accumulation](graph-accumulation.md) and the Vitkin relationship-lookup probing
+in the session log) involved many manual page loads and one extra live match-confirm
+outside the normal automated cadence, which may have pushed the WAF reputation score
+higher than a normal automated session would. Not confirmed, just the most likely
+explanation given the timing.
+
+Takeaway: if a captcha flag persists for many consecutive instant-block sessions, don't
+assume something broke — check whether unusual manual/live probing happened recently,
+and avoid *further* live probing while a flag is active, since that's plausibly what
+extends it.

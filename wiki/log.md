@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-07-22] log | Unusually long WAF flag — 9 consecutive instant-block sessions, ~19h
+
+**Object**: Session monitoring, WAF flag duration
+**Scenario**: incident (observation only, no code change)
+**Outcome**: ✅ resolved by waiting; circuit breaker behaved correctly throughout
+
+**What happened**: Starting the evening of 2026-07-21, nine consecutive runner
+sessions each hit a reCAPTCHA/Incapsula challenge on the very first match, with zero
+new confirms across roughly 19 hours — far longer than the normal one-or-two-cycle
+flag duration seen over weeks of prior monitoring. No intervention was taken (correctly
+identified as not a code issue); the circuit breaker detected and backed off cleanly
+every single time. Likely cause: the prior day's live UI investigation (Vitkin
+relationship lookup, several manual page loads, one extra live match-confirm outside
+normal cadence) probably pushed the account's WAF reputation score higher than usual.
+Documented as a reference point so a future long flag isn't mistaken for a regression.
+
+**Code changes**: none.
+**Updated**: `wiki/concepts/rate-limiting.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-19] fix | notify_vip.py false-triggered on its own "no hits" log line
 
 **Object**: `notify_vip.py` VIP surname scan

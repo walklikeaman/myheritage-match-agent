@@ -4,6 +4,33 @@
 
 ---
 
+## [2026-07-25] incident | Full 28h stop of the runner — WAF flag now ~76h old
+
+**Object**: `mh_runner_v3.sh` (screen session `myheritage`), WAF flag from 2026-07-21
+**Scenario**: incident (operator decision, no code change)
+**Outcome**: ✅ runner stopped cleanly
+
+**What happened**: The captcha flag from 2026-07-21 evening had not cleared after ~76
+hours of hourly 2h-backoff retries (every retry hit an instant block on the first
+match, zero new confirms across dozens of sessions since 2026-07-21). Fresh-session
+test on 2026-07-24 already ruled out a token-level cause. Operator asked why the
+retries kept happening, then chose to stop the automation entirely for roughly a day
+plus 4 hours (~28h) rather than keep probing every 2h, on the theory that continued
+attempts might be extending the flag rather than helping clear it. Before the full
+stop, operator also raised trying a manual human-solved captcha pass (open the site in
+a normal browser, confirm a match by hand, solve the challenge if shown) as a
+lower-cost alternative — worth trying alongside or before further automated attempts,
+not yet executed as of this entry.
+
+Runner was killed (`screen -X quit` orphaned the inner bash loop; killed directly by
+PID). No sessions will run until manually restarted or the scheduled resume fires
+around 2026-07-26 06:46 local time.
+
+**Code changes**: none — `/tmp/mh_runner_v3.sh` is unchanged, just not running.
+**Updated**: `wiki/concepts/rate-limiting.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-24] verify | Fresh session capture does NOT clear the WAF flag — it's IP/account-level
 
 **Object**: WAF flag from 2026-07-21, still active

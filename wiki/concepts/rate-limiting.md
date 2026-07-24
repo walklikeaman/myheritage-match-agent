@@ -91,3 +91,14 @@ attempt on the fresh session hit the same instant reCAPTCHA challenge. This rule
 and/or account level on MyHeritage's side, independent of which browser session or cookie
 jar makes the request. Re-capturing a session is therefore **not a working fix** for this
 kind of flag — only elapsed time (and presumably ceasing all automated attempts) works.
+
+## Update (2026-07-25): full 28h stop after ~76h of continuous instant-block
+
+The flag from 2026-07-21 was still instant-blocking every retry ~76h later, across
+dozens of 2h-backoff cycles with zero new confirms. Operator stopped the runner
+completely (killed the screen session) for roughly a day plus 4 hours rather than keep
+retrying every 2h, on the theory that continued automated attempts might be extending
+the flag instead of it decaying passively. Also floated but not yet tried: a manual,
+human-solved captcha pass (open the site in a normal logged-in browser, confirm one
+match by hand) as a cheap test of whether a genuine human challenge-solve resets the
+WAF reputation score faster than passive waiting — untested, log here if tried.

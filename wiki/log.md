@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-07-24] verify | Fresh session capture does NOT clear the WAF flag — it's IP/account-level
+
+**Object**: WAF flag from 2026-07-21, still active
+**Scenario**: verification test
+**Outcome**: ✅ hypothesis tested and disproven; flag is not token-bound
+
+**What happened**: The captcha flag from 2026-07-21 evening was still blocking every
+session on the first match ~55 hours later. To test whether it was tied to the stored
+session cookie, operator manually ran `python3 main.py --capture-session` (visible
+browser, brand-new profile, fresh login). Restarted the runner on the new session --
+the very first match still hit an instant reCAPTCHA block. This rules out a stale/flagged
+session token as the mechanism; the flag lives at the IP and/or account level on
+MyHeritage's side. Re-capturing a session is confirmed **not** a working remedy for this
+kind of block -- only waiting (and not generating further flagged attempts) works.
+
+**Code changes**: none.
+**Updated**: `wiki/concepts/rate-limiting.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-22] log | Unusually long WAF flag — 9 consecutive instant-block sessions, ~19h
 
 **Object**: Session monitoring, WAF flag duration

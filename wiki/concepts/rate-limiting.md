@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-07-22
-sources: [agent-briefing, postmortem-2026-06-26, live-note-2026-07-22]
+updated: 2026-07-24
+sources: [agent-briefing, postmortem-2026-06-26, live-note-2026-07-22, live-note-2026-07-24]
 confidence: high
 status: active
 relates_to: [myheritage, browser-auth, agent-architecture]
@@ -80,3 +80,14 @@ Takeaway: if a captcha flag persists for many consecutive instant-block sessions
 assume something broke — check whether unusual manual/live probing happened recently,
 and avoid *further* live probing while a flag is active, since that's plausibly what
 extends it.
+
+## Update (2026-07-24): flag survived a fully fresh session — it's IP/account-level, not token-level
+
+The flag from 2026-07-21 was still active ~55h later. Operator ran `--capture-session`
+manually (visible browser, brand-new profile, fresh login, fresh cookies) specifically to
+test whether the block was tied to the session token. It was not: the very first match
+attempt on the fresh session hit the same instant reCAPTCHA challenge. This rules out
+"stale/flagged cookie" as the mechanism and points to the flag living at the IP address
+and/or account level on MyHeritage's side, independent of which browser session or cookie
+jar makes the request. Re-capturing a session is therefore **not a working fix** for this
+kind of flag — only elapsed time (and presumably ceasing all automated attempts) works.

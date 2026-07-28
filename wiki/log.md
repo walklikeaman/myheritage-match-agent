@@ -4,6 +4,36 @@
 
 ---
 
+## [2026-07-28] verify | Manual browse via embedded Claude Browser tool did not clear the flag; test may be invalid
+
+**Object**: WAF flag from 2026-07-21 (still active, now ~7 days)
+**Scenario**: verification test
+**Outcome**: ⚠️ partial — inconclusive, likely tainted test
+
+**What happened**: Operator manually logged into MyHeritage inside the *embedded Claude
+Browser tool* (`mcp__Claude_Browser__*`, a CDP-driven Chromium instance) and browsed
+the Smart/Record Matches list pages themselves, reporting pages loaded very slowly
+(minutes) but did eventually load — no captcha screen was reported during that manual
+browsing, and no match confirm was actually clicked by the operator in that session.
+
+Immediately after, ran a small automated test (`--max 5`) via the normal Playwright
+script to check whether the flag had cleared: it did not — instant reCAPTCHA block on
+the very first match confirm, identical to every prior attempt since 2026-07-21 (log:
+`logs/session_test_20260728_214521_manual-recovery-check.log`).
+
+**Important caveat**: the embedded Claude Browser tool is itself a Chromium instance
+driven via an automation protocol (CDP), similar in fingerprint terms to Playwright.
+It is likely not a clean "ordinary human browser" control for this test even though
+the operator's own clicks drove it. A fair test of the "human solving the challenge
+resets reputation" hypothesis needs the operator's actual everyday browser (Safari or
+normal Chrome, opened outside any Claude tool), with the operator personally clicking
+Confirm on a match and solving any captcha shown — not yet attempted.
+
+**Code changes**: none.
+**Updated**: `wiki/concepts/rate-limiting.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-25] incident | Full 28h stop of the runner — WAF flag now ~76h old
 
 **Object**: `mh_runner_v3.sh` (screen session `myheritage`), WAF flag from 2026-07-21

@@ -102,3 +102,15 @@ the flag instead of it decaying passively. Also floated but not yet tried: a man
 human-solved captcha pass (open the site in a normal logged-in browser, confirm one
 match by hand) as a cheap test of whether a genuine human challenge-solve resets the
 WAF reputation score faster than passive waiting — untested, log here if tried.
+
+## Update (2026-07-28): embedded Claude Browser tool is not a clean "human" test control
+
+Operator tried the manual-pass idea using the embedded Claude Browser tool (a
+CDP-driven Chromium instance) to log in and browse. Pages loaded slowly (minutes) but
+no captcha appeared during that browsing, and no match was actually confirmed by hand.
+A follow-up automated `--max 5` test immediately after still hit the instant reCAPTCHA
+block — no change. Caveat worth remembering: CDP-driven browser tools likely carry
+similar automation fingerprints to Playwright, so operator clicks inside them may not
+register as "ordinary human" to the WAF. The clean version of this test requires the
+operator's own everyday browser (Safari/normal Chrome, not opened through any Claude
+tool) confirming a match and solving any captcha shown by hand.

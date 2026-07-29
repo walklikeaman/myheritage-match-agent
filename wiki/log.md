@@ -4,6 +4,45 @@
 
 ---
 
+## [2026-07-29] verify | Real Chrome manual pass succeeds, automated script still instant-blocked — reframes the flag as client-fingerprint, not account/IP reputation
+
+**Object**: WAF flag from 2026-07-21 (now ~8 days), circuit breaker
+**Scenario**: verification test — most conclusive so far
+**Outcome**: ✅ hypothesis clarified (previous "IP/account-level" theory was incomplete)
+
+**What happened**: Operator manually logged into MyHeritage in their own everyday
+Chrome (not any Claude tool), opened Smart Matches, hit a captcha once, solved it
+themselves, and successfully confirmed a couple of matches by hand — no further
+issues on their end, just generally slow page loads. Immediately after, ran the
+automated Playwright script (`--max 5`, same account, same session file, same
+machine/IP): instant reCAPTCHA block on the very first match confirm, identical to
+every attempt since 2026-07-21
+(`logs/session_test_20260729_030822_post-manual-captcha-check.log`).
+
+**Why this matters**: same account, same IP, same day — a genuine human in an
+ordinary browser sails through, while the Playwright-driven script is blocked
+immediately. That rules out a pure account/IP-level timeout (the 2026-07-24 fresh
+session test used Playwright too, just headless=False, so it was never a clean
+control). The block tracks the automation client's own fingerprint (headless/CDP
+signals, webdriver flags, etc.), not a reputation score on the account that a human
+pass could reset. This means **waiting longer, or having a human solve captchas,
+will not un-block the automated script** — the script itself is what gets detected,
+every time, regardless of account standing.
+
+**Implication for next steps**: continuing the automated runner as-is will likely
+keep hitting instant blocks indefinitely rather than this being a temporary flag that
+clears. Real options going forward are (a) keep the script for occasional
+lower-frequency attempts in case scoring is probabilistic rather than absolute, (b)
+lean more on manual confirmation in a real browser (slower but reliably works), or
+(c) accept that full automation may not be reliably sustainable against this WAF
+without changes to the automation approach itself that would cross into deliberate
+bot-detection evasion, which the operator's agent should not pursue.
+
+**Code changes**: none.
+**Updated**: `wiki/concepts/rate-limiting.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-28] verify | Manual browse via embedded Claude Browser tool did not clear the flag; test may be invalid
 
 **Object**: WAF flag from 2026-07-21 (still active, now ~7 days)

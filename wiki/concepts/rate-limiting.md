@@ -114,3 +114,20 @@ similar automation fingerprints to Playwright, so operator clicks inside them ma
 register as "ordinary human" to the WAF. The clean version of this test requires the
 operator's own everyday browser (Safari/normal Chrome, not opened through any Claude
 tool) confirming a match and solving any captcha shown by hand.
+
+## Update (2026-07-29): the clean test — real Chrome passes, automated script still blocked
+
+Operator ran the real test: logged into MyHeritage in their own everyday Chrome
+(outside any Claude tool), hit a captcha once, solved it, and confirmed a couple of
+matches by hand successfully. Immediately after, the automated Playwright script
+(same account/IP/session) still hit an instant reCAPTCHA block on the first match.
+
+**This reframes the whole picture.** The earlier "IP/account-level" conclusion
+(2026-07-24 entry above) was based on a Playwright-driven fresh session — never a
+true human-vs-bot control. This time we have same account + same IP + same day, and
+the split is clean: human in an ordinary browser passes, Playwright-driven script
+doesn't. That points to **client-fingerprint detection** (headless/CDP signals) on
+the automation tool itself, not an account-level reputation timer. Waiting longer, or
+having a human solve captchas elsewhere, does not un-block the script — the script's
+own signature is what's being caught, every single time. Treat this as the current
+best explanation until contradicted by new evidence.

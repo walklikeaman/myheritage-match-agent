@@ -4,6 +4,36 @@
 
 ---
 
+## [2026-08-01] update | Resumed runner on slower cadence + new manual-triage priority list
+
+**Object**: `mh_runner_v3.sh`, new `priority_list.py`
+**Scenario**: regular (operator decision after 2026-07-29 fingerprint finding)
+**Outcome**: ✅ both shipped; runner test still instant-blocked (expected)
+
+**What happened**: Per Nikita 2026-08-01 (after declining to build any bot-detection
+evasion into the automation): (1) resumed the existing runner unchanged in logic, just
+with a much slower cadence — clean-exit pauses widened from ~40min-2.5h to 3-12h
+(~3-6 sessions/day instead of near-continuous), and the captcha backoff lengthened
+from 2h to 6h, since hammering a client-fingerprint block doesn't help and may have
+contributed to how long the 2026-07-21 flag lasted. (2) Built `priority_list.py`, a
+read-only script that lists pending Smart Matches people (safe — this step alone has
+never triggered the WAF challenge) and cross-references names against direct-ancestor
+and VIP-surname records, so manual confirmation time in a real browser goes to the
+highest-value people first instead of randomly. First run found no VIP/ancestor
+overlap in the top 160 (an unrelated English-nobility branch dominates by raw count) —
+see [priority-list](concepts/priority-list.md) for the known limitation.
+
+A manual test run right after relaunching the runner still hit the instant reCAPTCHA
+block on the first match, consistent with the 2026-07-29 client-fingerprint finding —
+slower cadence doesn't change that, it's just lower-cost to keep trying.
+
+**Code changes**: `priority_list.py` (new), `/tmp/mh_runner_v3.sh` (ephemeral, not
+tracked — cadence change documented here and in rate-limiting.md so it survives the
+next `/tmp` wipe).
+**Updated**: `wiki/concepts/priority-list.md` (new), `wiki/index.md`, `wiki/log.md`
+
+---
+
 ## [2026-07-29] verify | Real Chrome manual pass succeeds, automated script still instant-blocked — reframes the flag as client-fingerprint, not account/IP reputation
 
 **Object**: WAF flag from 2026-07-21 (now ~8 days), circuit breaker

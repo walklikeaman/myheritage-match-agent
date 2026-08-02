@@ -5,6 +5,9 @@ Usage:
   python main.py                     # combined mode: SM then RM per person, largest families first
   python main.py --smart-only        # Smart Matches only
   python main.py --record-only       # Record Matches only
+  python main.py --extract-confirmed # extract data from already-confirmed Smart Matches
+                                      # (e.g. matches bulk-confirmed via "Совпадения по
+                                      # источнику" that never got their data pulled in)
   python main.py --visible           # non-headless (debug)
   python main.py --max 50            # limit session to 50 matches
   python main.py --scroll 15         # scroll rounds to load people list (default: 8)
@@ -29,6 +32,7 @@ from auth.browser_auth import create_browser_context, validate_and_save_session
 from browser.smart_matches import (
     run_smart_matches_session,
     run_combined_session,
+    run_extract_confirmed_session,
 )
 from browser.record_matches import run_record_matches_session
 
@@ -122,6 +126,11 @@ async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int, w
                 page, max_matches=max_matches, scroll_rounds=scroll_rounds,
                 wait_for_captcha=wait_for_captcha,
             )
+        elif mode == "extract_confirmed":
+            summary = await run_extract_confirmed_session(
+                page, max_matches=max_matches, scroll_rounds=scroll_rounds,
+                wait_for_captcha=wait_for_captcha,
+            )
         else:  # record
             summary = await run_record_matches_session(page, max_matches=max_matches)
 
@@ -138,8 +147,12 @@ async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int, w
         table.add_row("  · Record Matches", str(summary.get("record_ok", 0)))
     table.add_row("⚠ Skipped", str(summary.get("skip", 0)))
     table.add_row("✗ Errors", str(summary.get("error", 0)))
-    if summary.get("aborted"):
+    if "new_fields" in summary:
+        table.add_row("New fields extracted", str(summary.get("new_fields", 0)))
+    if summary.get("aborted") == "captcha":
         table.add_row("⛔ Blocked (reCAPTCHA)", str(summary.get("blocked", 0)))
+    elif summary.get("aborted") == "dry":
+        table.add_row("Stopped early", "dry streak — likely fully covered")
     console.print(table)
 
 
@@ -152,6 +165,9 @@ def main() -> None:
                         help="Scroll rounds to load people list (default: 8, ~80-160 people)")
     parser.add_argument("--smart-only", action="store_true", help="Smart Matches only")
     parser.add_argument("--record-only", action="store_true", help="Record Matches only")
+    parser.add_argument("--extract-confirmed", action="store_true",
+                        help="Extract data from already-confirmed Smart Matches that "
+                             "were never enriched (e.g. bulk-confirmed via source tree)")
     parser.add_argument("--capture-session", action="store_true", help="One-time auth setup")
     parser.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
     parser.add_argument("--wait-for-captcha", action="store_true",
@@ -169,7 +185,9 @@ def main() -> None:
         console.print("[red]--wait-for-captcha requires --visible (nothing to look at otherwise)[/red]")
         sys.exit(1)
 
-    if args.smart_only:
+    if args.extract_confirmed:
+        mode = "extract_confirmed"
+    elif args.smart_only:
         mode = "smart"
     elif args.record_only:
         mode = "record"

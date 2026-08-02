@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-08-03] update | New mode: `--extract-confirmed` — pull data from bulk-confirmed matches
+
+**Object**: `browser/smart_matches.py`, `main.py`
+**Scenario**: regular (new feature, operator request following the 2026-08-02 source-tree bulk-confirm discovery)
+**Outcome**: ✅ shipped; mechanically verified live, still WAF-gated in headless mode
+
+**What happened**: The 2026-08-02 "Совпадения по источнику" → "Подтвердить все N совпадения" bulk action (see that day's entries) confirms links but never extracts field data — MyHeritage's own two-step design ("Confirming and saving data are TWO separate actions", per `entities/smart-matches.md`). Operator manually found, via a live confirmed match's compare page, that it shows an **"Извлечь информацию вручную"** link instead of "Подтвердить совпадение", pointing at the same `...&action=showExtractWizard&itemId=...` URL our existing wizard-extraction code already handles.
+
+Built `run_extract_confirmed_session()`: same per-match extraction path as `run_smart_matches_session`, but sourced from `matchStatus=8` (confirmed) instead of `32` (pending), entering each match via the manual extract link instead of a confirm click. `get_person_match_urls()` and `get_people_sorted_by_count()` gained a `match_status` parameter to support this (default unchanged at 32). `process_one_match()` gained an `extract_confirmed` flag that branches at the "already confirmed" check — previously an instant skip, now follows `_FIND_MANUAL_EXTRACT_LINK` into the same Step-3-onward wizard code, shared with the normal flow.
+
+**Design question from Nikita** ("сколько людей нужно проитерировать" — how many people do we need to iterate): extracting one "hub" person's match pulls in their whole visible family (spouse, children) from the matched tree, so many other confirmed matches nearby in the same cluster are often already redundant by the time we'd reach them — there's no way to know the right stopping point in advance. Implemented a "dry streak" heuristic instead of a fixed count: track consecutive people who add zero new fields; stop early after `_EXTRACT_CONFIRMED_DRY_STREAK` (5) in a row, on the theory the reachable cluster is already covered. Same "loop until dry" shape used for unknown-size discovery elsewhere, applied per-person.
+
+**Live test** (`--extract-confirmed --max 5 --scroll 4`, headless): mechanically correct — found confirmed people via `matchStatus=8`, followed the extract link on the first match, reached the wizard state check, and got the same instant reCAPTCHA block as ever. Confirms the 2026-07-29 finding generalizes: the WAF fingerprints the headless automation client itself, not the specific action (confirm vs. extract) — so `--extract-confirmed` needs the same `--visible --wait-for-captcha` combo as the normal flow, not a way around it.
+
+**Code changes**: `browser/smart_matches.py` (`run_extract_confirmed_session`, `_FIND_MANUAL_EXTRACT_LINK`, `match_status` params), `main.py` (`--extract-confirmed` flag).
+**Updated**: `wiki/log.md`. `wiki/entities/smart-matches.md` could use a follow-up note on the matchStatus=8/32 split — not yet done.
+
+---
+
 ## [2026-08-01] update | Human-in-the-loop captcha solving: `--wait-for-captcha`
 
 **Object**: `main.py`, `browser/smart_matches.py`

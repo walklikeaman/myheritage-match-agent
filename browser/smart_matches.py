@@ -283,7 +283,18 @@ async def _poll_save_click(page: Page, timeout: float = 10.0, interval: float = 
 # Core match processing
 # ---------------------------------------------------------------------------
 
-async def process_one_match(page: Page, match_url: str, wait_for_captcha: bool = False) -> dict:
+_FIND_MANUAL_EXTRACT_LINK = """
+() => {
+    const a = [...document.querySelectorAll('a')]
+        .find(el => el.textContent.includes('Извлечь информацию вручную'));
+    return a ? a.href : null;
+}
+"""
+
+
+async def process_one_match(
+    page: Page, match_url: str, wait_for_captcha: bool = False, extract_confirmed: bool = False,
+) -> dict:
     """
     Process a single match-compare URL end-to-end.
     Returns {"status": "ok"|"skip"|"error", "fields": int, "url": str}
@@ -303,65 +314,78 @@ async def process_one_match(page: Page, match_url: str, wait_for_captcha: bool =
 
     # Already confirmed?
     if await page.evaluate(_IS_CONFIRMED):
-        logger.info("  Already confirmed — skipping")
-        result["status"] = "skip"
-        return result
-
-    # WAF may serve the reCAPTCHA challenge on the compare page itself — bail BEFORE
-    # confirming, so we don't consume a match we can't enrich.
-    if await page.evaluate(_IS_BOT_CHALLENGE):
-        cleared = False
-        if wait_for_captcha:
-            for attempt in (1, 2):
-                if await _wait_for_human_captcha_solve(page, attempt):
-                    cleared = True
-                    break
-        if not cleared:
-            logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
-            result["status"] = "blocked"
-            return result
-
-    # --- Step 2: Click confirm button ---
-    try:
-        res = await page.evaluate(_ANGULAR_CLICK, "text:Подтвердить совпадение")
-        if res == "NOT_FOUND":
-            logger.warning("  Confirm button not found")
+        if not extract_confirmed:
+            logger.info("  Already confirmed — skipping")
             result["status"] = "skip"
             return result
-        logger.debug(f"  Confirm click: {res}")
-    except Exception as e:
-        logger.error(f"  Confirm click error: {e}")
-        result["status"] = "error"
-        return result
+        # extract_confirmed mode: this match was confirmed earlier (e.g. via the
+        # matches-by-source bulk "Подтвердить все" action) but never enriched. The
+        # compare page for a confirmed match shows "Извлечь информацию вручную"
+        # instead of "Подтвердить совпадение" — it leads to the same showExtractWizard
+        # URL our normal flow reaches after confirming, so jump straight there.
+        manual_link = await page.evaluate(_FIND_MANUAL_EXTRACT_LINK)
+        if not manual_link:
+            logger.info("  Already confirmed, no extract link found — skipping")
+            result["status"] = "skip"
+            return result
+        logger.debug("  Already confirmed — following extract link directly")
+        await page.goto(manual_link, wait_until="domcontentloaded", timeout=30000)
+        await _sleep(3, 5)
+        on_wizard = "showExtractWizard" in page.url
+        if not on_wizard:
+            logger.warning("  Could not reach wizard from confirmed match — skipping")
+            result["status"] = "skip"
+            return result
+    else:
+        # WAF may serve the reCAPTCHA challenge on the compare page itself — bail BEFORE
+        # confirming, so we don't consume a match we can't enrich.
+        if await page.evaluate(_IS_BOT_CHALLENGE):
+            cleared = False
+            if wait_for_captcha:
+                for attempt in (1, 2):
+                    if await _wait_for_human_captcha_solve(page, attempt):
+                        cleared = True
+                        break
+            if not cleared:
+                logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
+                result["status"] = "blocked"
+                return result
 
-    # Wait for navigation to wizard (auto-redirect) or stay on compare
-    await _sleep(7, 10)
+        # --- Step 2: Click confirm button ---
+        try:
+            res = await page.evaluate(_ANGULAR_CLICK, "text:Подтвердить совпадение")
+            if res == "NOT_FOUND":
+                logger.warning("  Confirm button not found")
+                result["status"] = "skip"
+                return result
+            logger.debug(f"  Confirm click: {res}")
+        except Exception as e:
+            logger.error(f"  Confirm click error: {e}")
+            result["status"] = "error"
+            return result
 
-    # If page navigated away (exception is swallowed), we're on the wizard
-    current_url = page.url
-    on_wizard = "showExtractWizard" in current_url
+        # Wait for navigation to wizard (auto-redirect) or stay on compare
+        await _sleep(7, 10)
 
-    if not on_wizard:
-        # Try to find manual "Извлечь информацию вручную" link
-        manual_link = await page.evaluate("""
-            () => {
-                const a = [...document.querySelectorAll('a')]
-                    .find(el => el.textContent.includes('Извлечь информацию вручную'));
-                return a ? a.href : null;
-            }
-        """)
-        if manual_link:
-            logger.debug("  Following manual wizard link")
-            await page.goto(manual_link, wait_until="domcontentloaded", timeout=30000)
-            await _sleep(3, 5)
-            on_wizard = "showExtractWizard" in page.url
+        # If page navigated away (exception is swallowed), we're on the wizard
+        current_url = page.url
+        on_wizard = "showExtractWizard" in current_url
 
         if not on_wizard:
-            # Already confirmed via link-only flow?
-            if await page.evaluate(_IS_CONFIRMED):
-                result["status"] = "ok"
-                result["fields"] = 0
-                return result
+            # Try to find manual "Извлечь информацию вручную" link
+            manual_link = await page.evaluate(_FIND_MANUAL_EXTRACT_LINK)
+            if manual_link:
+                logger.debug("  Following manual wizard link")
+                await page.goto(manual_link, wait_until="domcontentloaded", timeout=30000)
+                await _sleep(3, 5)
+                on_wizard = "showExtractWizard" in page.url
+
+            if not on_wizard:
+                # Already confirmed via link-only flow?
+                if await page.evaluate(_IS_CONFIRMED):
+                    result["status"] = "ok"
+                    result["fields"] = 0
+                    return result
             logger.warning("  Could not reach wizard")
             result["status"] = "skip"
             return result
@@ -521,11 +545,13 @@ _EXTRACT_PEOPLE = """
 """
 
 
-async def get_person_match_urls(page: Page, person_id: str, match_type: int = 2) -> list[str]:
-    """Return all pending match-compare URLs for a person."""
+async def get_person_match_urls(
+    page: Page, person_id: str, match_type: int = 2, match_status: int = 32,
+) -> list[str]:
+    """Return all match-compare URLs for a person at the given status (32=pending, 8=confirmed)."""
     url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-for-person/{person_id}"
-        f"?matchType={match_type}&matchStatus=32&lang=RU"
+        f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     await _sleep(4, 6)
@@ -541,14 +567,16 @@ async def get_people_sorted_by_count(
     page: Page,
     match_type: int = 2,
     scroll_rounds: int = 8,
+    match_status: int = 32,
 ) -> list[dict]:
     """
     Scrape the matches-by-people list with infinite-scroll, sort by match count desc.
     match_type=2 → Smart Matches, match_type=1 → Record Matches.
+    match_status=32 → pending, match_status=8 → confirmed (see run_extract_confirmed_session).
     """
     list_url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
-        f"?matchType={match_type}&matchStatus=32&lang=RU"
+        f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
     await page.goto(list_url, wait_until="networkidle", timeout=45000)
     await _sleep(5, 7)
@@ -621,6 +649,87 @@ async def run_smart_matches_session(
                 await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
 
         summary["people"] += 1
+        await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
+
+    return summary
+
+
+# Consecutive people who yield zero new fields before we assume this branch of the
+# tree is already covered (the "Извлечь всю информацию" step pulls in a matched
+# person's whole visible family — spouse, children — so extracting an early "hub"
+# person often makes several later confirmed matches in the same cluster redundant).
+_EXTRACT_CONFIRMED_DRY_STREAK = 5
+
+
+async def run_extract_confirmed_session(
+    page: Page,
+    max_matches: int = 200,
+    scroll_rounds: int = 8,
+    wait_for_captcha: bool = False,
+) -> dict:
+    """
+    Walk already-CONFIRMED Smart Matches (matchStatus=8) and extract/save the data
+    that was never pulled in — e.g. matches confirmed in bulk via the "Совпадения по
+    источнику" → "Подтвердить все" action, which registers the link but does not
+    extract any fields. Same per-match extraction code as run_smart_matches_session,
+    just entered via the "Извлечь информацию вручную" link instead of a confirm click.
+
+    No pre-computed iteration count: a single extraction can cascade in several
+    relatives' data via the matched tree's visible family, so a later person's own
+    "confirmed match" entry is often already redundant. Instead of guessing how many
+    people to cover, we track a rolling streak of people who added zero new fields and
+    stop early once _EXTRACT_CONFIRMED_DRY_STREAK is hit — same "loop until dry" idea
+    used elsewhere for unknown-size discovery, applied per-person instead of per-round.
+    """
+    summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0, "new_fields": 0}
+
+    logger.info("Loading confirmed Smart Matches by-people list (sorted by count)…")
+    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds, match_status=8)
+    logger.info(f"Found {len(people)} people with confirmed matches | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
+
+    dry_streak = 0
+    for person in people:
+        if summary["processed"] >= max_matches:
+            logger.info(f"Session cap ({max_matches}) reached — stopping")
+            break
+
+        logger.info(f"\n{'='*60}\n{person['name']} (ID: {person['id']}, ~{person['count']} confirmed matches)")
+        match_urls = await get_person_match_urls(page, person["id"], match_type=2, match_status=8)
+        logger.info(f"  {len(match_urls)} confirmed Smart Matches to extract")
+
+        person_new_fields = 0
+        for i, url in enumerate(match_urls):
+            if summary["processed"] >= max_matches:
+                break
+            result = await process_one_match(
+                page, url, wait_for_captcha=wait_for_captcha, extract_confirmed=True,
+            )
+            status = result["status"]
+            summary["processed"] += 1
+            summary[status] = summary.get(status, 0) + 1
+            summary["new_fields"] += result["fields"]
+            person_new_fields += result["fields"]
+            logger.info(f"  [{i+1}/{len(match_urls)}] {status.upper()} ({result['fields']} fields) | total: {summary['processed']}")
+            if status == "blocked":
+                summary["aborted"] = "captcha"
+                logger.error(f"reCAPTCHA challenge (captcha) — aborting session after {summary['processed']} matches to back off")
+                return summary
+            if i < len(match_urls) - 1:
+                await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
+
+        summary["people"] += 1
+        if person_new_fields == 0:
+            dry_streak += 1
+            logger.debug(f"  0 new fields for this person — dry streak {dry_streak}/{_EXTRACT_CONFIRMED_DRY_STREAK}")
+            if dry_streak >= _EXTRACT_CONFIRMED_DRY_STREAK:
+                summary["aborted"] = "dry"
+                logger.info(
+                    f"{dry_streak} people in a row added nothing new — likely already "
+                    "covered via relative cascade from earlier extractions. Stopping early."
+                )
+                return summary
+        else:
+            dry_streak = 0
         await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
 
     return summary

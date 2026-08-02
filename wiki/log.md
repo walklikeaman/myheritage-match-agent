@@ -4,6 +4,42 @@
 
 ---
 
+## [2026-08-01] update | Human-in-the-loop captcha solving: `--wait-for-captcha`
+
+**Object**: `main.py`, `browser/smart_matches.py`
+**Scenario**: regular (new feature, operator request)
+**Outcome**: ✅ shipped, not yet tested live
+
+**What happened**: Per Nikita 2026-08-01, after clarifying the difference between
+"the agent bypasses/solves the captcha" (refused — off-limits regardless of
+authorization) and "a human solves it, automation resumes after" (legitimate,
+buildable): added a `--wait-for-captcha` flag. Only meaningful with `--visible`
+(headless has no window for a human to look at). When the WAF challenge is detected
+— either on the compare page before confirming, or in place of the extract wizard
+after confirming — instead of immediately aborting the session, the script now pauses
+and blocks on terminal input, asking the operator to solve the captcha in the visible
+Chromium window and press Enter. Up to 2 solve attempts per challenge before falling
+back to the existing "blocked" circuit-breaker behavior. New helper:
+`_wait_for_human_captcha_solve()` in `browser/smart_matches.py`, threaded through
+`process_one_match()` → `run_smart_matches_session()` → `main.py`'s `run()`.
+
+**Important**: this must be run by the operator directly in their own terminal
+(`python3 main.py --visible --wait-for-captcha --smart-only --max 100 --scroll 8
+--verbose`), not launched via the agent's Bash tool — the Enter-keypress-to-continue
+needs a human at the actual keyboard, same constraint as `--capture-session`.
+
+**Why headful might succeed where headless never does**: headless=True launches
+Playwright's `chrome-headless-shell` binary (a stripped build with a more
+recognizable fingerprint); headless=False launches full Chromium. Combined with a
+human actually present to solve any challenge, this hasn't been tested yet as of this
+entry — the 2026-07-29 finding only tested full automation (headless) vs. a
+completely separate ordinary-Chrome session, not this specific hybrid.
+
+**Code changes**: `main.py`, `browser/smart_matches.py` (see commit).
+**Updated**: `wiki/log.md`. Follow-up entry once the operator has actually run it.
+
+---
+
 ## [2026-08-01] update | Resumed runner on slower cadence + new manual-triage priority list
 
 **Object**: `mh_runner_v3.sh`, new `priority_list.py`

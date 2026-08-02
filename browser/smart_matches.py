@@ -231,6 +231,22 @@ async def _sleep(lo: float, hi: float) -> None:
     await asyncio.sleep(random.uniform(lo, hi))
 
 
+async def _wait_for_human_captcha_solve(page: Page, attempt: int) -> bool:
+    """
+    Pause and let a human solve the captcha in the visible browser window
+    (only meaningful with --visible). Blocks on terminal input without
+    blocking the event loop. Returns True if the challenge is gone after.
+    """
+    loop = asyncio.get_event_loop()
+    logger.warning(
+        f"  reCAPTCHA shown (attempt {attempt}) — solve it in the browser window, "
+        "then press Enter here to continue…"
+    )
+    await loop.run_in_executor(None, input, "  [press Enter after solving the captcha] ")
+    still_blocked = await page.evaluate(_IS_BOT_CHALLENGE)
+    return not still_blocked
+
+
 async def _await_wizard_ready(page: Page, timeout: float = 10.0, interval: float = 0.7) -> str:
     """
     Poll the post-confirm wizard. Angular renders the extract control client-side, so a
@@ -267,7 +283,7 @@ async def _poll_save_click(page: Page, timeout: float = 10.0, interval: float = 
 # Core match processing
 # ---------------------------------------------------------------------------
 
-async def process_one_match(page: Page, match_url: str) -> dict:
+async def process_one_match(page: Page, match_url: str, wait_for_captcha: bool = False) -> dict:
     """
     Process a single match-compare URL end-to-end.
     Returns {"status": "ok"|"skip"|"error", "fields": int, "url": str}
@@ -294,9 +310,16 @@ async def process_one_match(page: Page, match_url: str) -> dict:
     # WAF may serve the reCAPTCHA challenge on the compare page itself — bail BEFORE
     # confirming, so we don't consume a match we can't enrich.
     if await page.evaluate(_IS_BOT_CHALLENGE):
-        logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
-        result["status"] = "blocked"
-        return result
+        cleared = False
+        if wait_for_captcha:
+            for attempt in (1, 2):
+                if await _wait_for_human_captcha_solve(page, attempt):
+                    cleared = True
+                    break
+        if not cleared:
+            logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
+            result["status"] = "blocked"
+            return result
 
     # --- Step 2: Click confirm button ---
     try:
@@ -349,6 +372,12 @@ async def process_one_match(page: Page, match_url: str) -> dict:
     # read was firing before the control existed) AND catches the reCAPTCHA bot-challenge
     # the WAF serves in place of the wizard when the session is flagged.
     wizard_state = await _await_wizard_ready(page, timeout=10.0)
+    if wizard_state == "challenge":
+        if wait_for_captcha:
+            for attempt in (1, 2):
+                if await _wait_for_human_captcha_solve(page, attempt):
+                    wizard_state = await _await_wizard_ready(page, timeout=10.0)
+                    break
     if wizard_state == "challenge":
         # The match was confirmed in Step 2, but the wizard is walled off by reCAPTCHA.
         # Continuing would confirm more matches without enriching them, so stop the
@@ -555,6 +584,7 @@ async def run_smart_matches_session(
     page: Page,
     max_matches: int = 200,
     scroll_rounds: int = 8,
+    wait_for_captcha: bool = False,
 ) -> dict:
     """Smart Matches (matchType=2) session — largest families first."""
     summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
@@ -575,7 +605,7 @@ async def run_smart_matches_session(
         for i, url in enumerate(match_urls):
             if summary["processed"] >= max_matches:
                 break
-            result = await process_one_match(page, url)
+            result = await process_one_match(page, url, wait_for_captcha=wait_for_captcha)
             status = result["status"]
             summary["processed"] += 1
             summary[status] = summary.get(status, 0) + 1

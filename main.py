@@ -95,7 +95,7 @@ async def capture_session() -> None:
         await context.close()
 
 
-async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int) -> None:
+async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int, wait_for_captcha: bool = False) -> None:
     from playwright.async_api import async_playwright
 
     console.print(f"[bold]MyHeritage Agent[/bold] | mode={mode} | headless={headless} | max={max_matches} | scroll={scroll_rounds}")
@@ -118,7 +118,10 @@ async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int) -
         if mode == "combined":
             summary = await run_combined_session(page, max_matches=max_matches, scroll_rounds=scroll_rounds)
         elif mode == "smart":
-            summary = await run_smart_matches_session(page, max_matches=max_matches, scroll_rounds=scroll_rounds)
+            summary = await run_smart_matches_session(
+                page, max_matches=max_matches, scroll_rounds=scroll_rounds,
+                wait_for_captcha=wait_for_captcha,
+            )
         else:  # record
             summary = await run_record_matches_session(page, max_matches=max_matches)
 
@@ -151,6 +154,9 @@ def main() -> None:
     parser.add_argument("--record-only", action="store_true", help="Record Matches only")
     parser.add_argument("--capture-session", action="store_true", help="One-time auth setup")
     parser.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
+    parser.add_argument("--wait-for-captcha", action="store_true",
+                        help="On reCAPTCHA, pause and wait for a human to solve it in the "
+                             "visible window instead of aborting (requires --visible)")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
@@ -158,6 +164,10 @@ def main() -> None:
     if args.capture_session:
         asyncio.run(capture_session())
         return
+
+    if args.wait_for_captcha and not args.visible:
+        console.print("[red]--wait-for-captcha requires --visible (nothing to look at otherwise)[/red]")
+        sys.exit(1)
 
     if args.smart_only:
         mode = "smart"
@@ -171,6 +181,7 @@ def main() -> None:
         headless=not args.visible,
         max_matches=args.max,
         scroll_rounds=args.scroll,
+        wait_for_captcha=args.wait_for_captcha,
     ))
 
 

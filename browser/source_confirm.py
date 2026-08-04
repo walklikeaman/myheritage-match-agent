@@ -25,6 +25,7 @@ from loguru import logger
 from playwright.async_api import Page
 
 from config import BASE_URL
+from browser.smart_matches import _IS_BOT_CHALLENGE
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
 SOURCES_URL = f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-source?lang=RU"
@@ -101,6 +102,16 @@ async def confirm_all_for_source(page: Page, source: dict) -> dict:
         logger.error(f"  Navigation failed: {e}")
         return result
 
+    # This endpoint has never shown the reCAPTCHA/Incapsula challenge in testing
+    # (2026-08-02 through 2026-08-05), but the per-match flow looked safe for months
+    # before it didn't — check anyway rather than assume, and use "blocked" (not
+    # "skip") so the runner's captcha grep and backoff pick it up correctly if this
+    # ever changes.
+    if await page.evaluate(_IS_BOT_CHALLENGE):
+        logger.error("  reCAPTCHA/Incapsula challenge on source page (captcha) — unexpected here, blocking session")
+        result["status"] = "blocked"
+        return result
+
     # Real Playwright locator clicks (auto-waits for visibility/actionability) — the
     # dropdown items here are plain Angular-bound divs, not <button>/<a>, and did not
     # respond reliably to a simulated triggerHandler('click') the way the wizard's
@@ -151,9 +162,13 @@ async def run_bulk_source_confirm_session(page: Page, max_sources: int = 5) -> d
         result = await confirm_all_for_source(page, source)
         summary["sources_processed"] += 1
         summary[result["status"]] = summary.get(result["status"], 0) + 1
+        logger.info(f"  {result['status'].upper()} (~{result['reported_count']} matches)")
+        if result["status"] == "blocked":
+            summary["aborted"] = "captcha"
+            logger.error(f"reCAPTCHA challenge (captcha) — aborting session after {summary['sources_processed']} sources to back off")
+            return summary
         if result["status"] == "ok":
             summary["total_reported"] += result["reported_count"]
-        logger.info(f"  {result['status'].upper()} (~{result['reported_count']} matches)")
         await _sleep(15, 30)
 
     return summary

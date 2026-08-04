@@ -154,6 +154,8 @@ async def run(
         table.add_row("⚠ Skipped", str(summary.get("skip", 0)))
         table.add_row("✗ Errors", str(summary.get("error", 0)))
         table.add_row("Matches reported (pre-confirm counts)", str(summary.get("total_reported", 0)))
+        if summary.get("aborted") == "captcha":
+            table.add_row("⛔ Blocked (reCAPTCHA)", str(summary.get("blocked", 0)))
         console.print(table)
         return
 

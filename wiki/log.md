@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-08-05] update | Cleared remaining source trees + confirm-by-source is now the standing runner
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`), `browser/source_confirm.py`
+**Scenario**: regular (operator-directed rollout of the 2026-08-05 confirm-by-source mode)
+**Outcome**: ✅ success — 21 source trees confirmed total today, zero captchas, runner switched over
+
+**What happened**: Per Nikita, after the first `--confirm-by-source --max-sources 5`
+batch (see earlier entry today) worked cleanly, ran a second batch with
+`--max-sources 20` to sweep the remaining trees: all 16 remaining sources
+confirmed successfully, 0 errors, 0 skips, ~44,160 matches reported. Combined with
+the earlier 5-tree batch, that's **21 source trees, ~61,850 matches reported
+confirmed today, zero reCAPTCHA/Incapsula challenges** across every run.
+
+Before this second batch, added WAF detection + circuit breaker to
+`confirm_all_for_source`/`run_bulk_source_confirm_session` (previously absent —
+this endpoint had never needed it, but "previous experience" with the per-match
+flow looking WAF-safe for months before it wasn't is exactly why this was added
+defensively rather than assumed unnecessary going forward).
+
+Rewrote `/tmp/mh_runner_v3.sh`: the standing loop now runs `--confirm-by-source
+--max-sources 8` instead of `--smart-only`. The old headless Smart Match loop is
+**dropped from unattended running** — it has instant-blocked on the first match
+every time since 2026-07-21 (client-fingerprint WAF gate, see
+[rate-limiting](concepts/rate-limiting.md)), so running it unattended only wasted
+cycles. It and `--extract-confirmed` remain available as manual commands
+(`--visible --wait-for-captcha`) for when the operator is present to solve a
+captcha by hand. Pacing for the new loop: 30-150min between sessions (moderate,
+not the old flow's multi-hour caution — this path has shown no WAF sensitivity so
+far, but the sample is still small, so deliberately not unthrottled either), 6h
+backoff if the captcha grep ever fires (it hasn't yet).
+
+**Code changes**: `browser/source_confirm.py`, `main.py` (WAF detection — see
+prior commit `8f69c2e`). Runner script itself is `/tmp`-ephemeral, not tracked —
+full content documented here so it survives the next `/tmp` wipe.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-05] update | New mode: `--confirm-by-source` — headless bulk confirm, zero captchas
 
 **Object**: new `browser/source_confirm.py`, `main.py`

@@ -8,6 +8,9 @@ Usage:
   python main.py --extract-confirmed # extract data from already-confirmed Smart Matches
                                       # (e.g. matches bulk-confirmed via "Совпадения по
                                       # источнику" that never got their data pulled in)
+  python main.py --confirm-by-source # bulk-confirm whole source trees at once (no per-match
+                                      # wizard, hasn't triggered the WAF in testing); use
+                                      # --max-sources to cap how many trees per session
   python main.py --visible           # non-headless (debug)
   python main.py --max 50            # limit session to 50 matches
   python main.py --scroll 15         # scroll rounds to load people list (default: 8)
@@ -35,6 +38,7 @@ from browser.smart_matches import (
     run_extract_confirmed_session,
 )
 from browser.record_matches import run_record_matches_session
+from browser.source_confirm import run_bulk_source_confirm_session
 
 console = Console()
 
@@ -99,7 +103,10 @@ async def capture_session() -> None:
         await context.close()
 
 
-async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int, wait_for_captcha: bool = False) -> None:
+async def run(
+    mode: str, headless: bool, max_matches: int, scroll_rounds: int,
+    wait_for_captcha: bool = False, max_sources: int = 5,
+) -> None:
     from playwright.async_api import async_playwright
 
     console.print(f"[bold]MyHeritage Agent[/bold] | mode={mode} | headless={headless} | max={max_matches} | scroll={scroll_rounds}")
@@ -131,10 +138,24 @@ async def run(mode: str, headless: bool, max_matches: int, scroll_rounds: int, w
                 page, max_matches=max_matches, scroll_rounds=scroll_rounds,
                 wait_for_captcha=wait_for_captcha,
             )
+        elif mode == "confirm_by_source":
+            summary = await run_bulk_source_confirm_session(page, max_sources=max_sources)
         else:  # record
             summary = await run_record_matches_session(page, max_matches=max_matches)
 
         await context.close()
+
+    if mode == "confirm_by_source":
+        table = Table(title="Session Summary")
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", justify="right")
+        table.add_row("Source trees processed", str(summary.get("sources_processed", 0)))
+        table.add_row("✓ Confirmed", str(summary.get("ok", 0)))
+        table.add_row("⚠ Skipped", str(summary.get("skip", 0)))
+        table.add_row("✗ Errors", str(summary.get("error", 0)))
+        table.add_row("Matches reported (pre-confirm counts)", str(summary.get("total_reported", 0)))
+        console.print(table)
+        return
 
     table = Table(title="Session Summary")
     table.add_column("Metric", style="bold")
@@ -168,6 +189,11 @@ def main() -> None:
     parser.add_argument("--extract-confirmed", action="store_true",
                         help="Extract data from already-confirmed Smart Matches that "
                              "were never enriched (e.g. bulk-confirmed via source tree)")
+    parser.add_argument("--confirm-by-source", action="store_true",
+                        help="Bulk-confirm whole source trees at once via 'Совпадения по "
+                             "источнику' instead of per-match confirmation")
+    parser.add_argument("--max-sources", type=int, default=5,
+                        help="Max source trees per session for --confirm-by-source (default: 5)")
     parser.add_argument("--capture-session", action="store_true", help="One-time auth setup")
     parser.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
     parser.add_argument("--wait-for-captcha", action="store_true",
@@ -185,7 +211,9 @@ def main() -> None:
         console.print("[red]--wait-for-captcha requires --visible (nothing to look at otherwise)[/red]")
         sys.exit(1)
 
-    if args.extract_confirmed:
+    if args.confirm_by_source:
+        mode = "confirm_by_source"
+    elif args.extract_confirmed:
         mode = "extract_confirmed"
     elif args.smart_only:
         mode = "smart"
@@ -200,6 +228,7 @@ def main() -> None:
         max_matches=args.max,
         scroll_rounds=args.scroll,
         wait_for_captcha=args.wait_for_captcha,
+        max_sources=args.max_sources,
     ))
 
 

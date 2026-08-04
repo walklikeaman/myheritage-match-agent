@@ -4,6 +4,52 @@
 
 ---
 
+## [2026-08-05] update | New mode: `--confirm-by-source` — headless bulk confirm, zero captchas
+
+**Object**: new `browser/source_confirm.py`, `main.py`
+**Scenario**: regular (operator strategy decision, formalizing the 2026-08-02 manual finding)
+**Outcome**: ✅ shipped and verified live — real progress, no WAF challenge, fully headless
+
+**What happened**: Per Nikita 2026-08-05, the per-match Smart Match flow (even
+`--wait-for-captcha`) kept surfacing captchas the operator had to solve by hand,
+too disruptive to run unattended. Operator explicitly decided to make the
+2026-08-02 "Совпадения по источнику" bulk-confirm the standing strategy for the
+bulk of matches — accepting that these are almost all very distant/collateral
+relatives, so skipping per-match review is an acceptable tradeoff (data is not
+extracted by this action anyway, only the link is confirmed; see
+`concepts/priority-list.md`/`entities/smart-matches.md` for the confirm-vs-save split).
+
+Built `run_bulk_source_confirm_session()`: scrapes `matches-by-source`, filters to
+individual family-site trees (`tree-...` hrefs) — the large aggregator collections
+(Filae, Geni World, FamilySearch, GenealogieOnline catalog: `collection-...` hrefs)
+do not expose the bulk "Дополнительные действия" menu and are skipped rather than
+failing per-source. For each of the top `--max-sources` (default 5) by pending
+count: open the dropdown, click "Подтвердить все N совпадения(-й)", confirm the
+modal.
+
+**Implementation snag**: the dropdown items are plain Angular-bound `<div>`s, not
+real `<button>`/`<a>` elements. The `window.angular.element(el).triggerHandler
+('click')` pattern used everywhere else in this codebase for wizard buttons did
+NOT reliably work here — clicks silently no-op'd. Switched to real Playwright
+locator clicks (`page.get_by_text(...).click()`, auto-waiting for actionability)
+for these three steps specifically; the source-list scrape itself stays pure JS
+`evaluate()` since it's just reading, not clicking.
+
+**Live verification** (`--confirm-by-source --max-sources 1`, fully headless): PARKER
+TREE Web Site, 4073 pending → confirmed via one script run → re-checked minutes
+later at 2916 pending (~1150 confirmed). Zero reCAPTCHA/Incapsula challenges
+across the whole run. This generalizes the 2026-08-02 finding across a THIRD
+source tree and, more importantly, across our own real headless Playwright client
+(not just the Claude Browser tool) — strong evidence the bulk-source-confirm
+GraphQL endpoint genuinely isn't gated by the same WAF rule as the per-match
+confirm/wizard flow, not just an artifact of which browser tool was used.
+
+**Code changes**: `browser/source_confirm.py` (new), `main.py` (`--confirm-by-source`,
+`--max-sources` flags).
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-03] update | New mode: `--extract-confirmed` — pull data from bulk-confirmed matches
 
 **Object**: `browser/smart_matches.py`, `main.py`

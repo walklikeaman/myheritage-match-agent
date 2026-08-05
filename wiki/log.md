@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-08-05] update | Graph accumulation catch-up (backlog from smart-only/extract-confirmed tests)
+
+**Object**: `data/family_graph.json` (`harvested_people`), `graph_updates.jsonl`
+**Scenario**: regular (ran alongside the confirm-by-source runner, per Nikita's request)
+**Outcome**: ✅ success — 20,340 harvested people (3,627 new), 0 VIP hits
+
+**What happened**: `graph_updates.jsonl` had grown to 2,220 records (up from 1,900 at
+the last accumulate) from the `--wait-for-captcha`/`--extract-confirmed` test
+sessions run 2026-08-02/03 — those flows go through the per-match wizard and DO
+capture navigator/relative data, unlike `--confirm-by-source`, which only confirms
+links and captures nothing (no wizard is ever opened in that path). Ran
+`graph_accumulate.py` to merge the backlog: 3,627 new harvested people, 20,340
+total. `notify_vip.py` found no Ганущинер/Рассадина hits. `data/family_graph.json`
+and `graph_updates.jsonl` are both gitignored (session/local data) — nothing to
+commit for this entry, logged here for the record per the auto-logging rule.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-05] update | Cleared remaining source trees + confirm-by-source is now the standing runner
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`), `browser/source_confirm.py`

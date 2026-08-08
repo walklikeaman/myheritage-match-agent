@@ -4,6 +4,35 @@
 
 ---
 
+## [2026-08-08] incident | Stuck inter-session sleep (Mac sleep), runner restarted
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)
+**Scenario**: incident (routine hourly monitoring caught it)
+**Outcome**: ✅ resolved — killed and relaunched, new session confirmed running
+
+**What happened**: Last successful `--confirm-by-source` session finished 17:33,
+sleeping the nominal 8085s (~135min, expected next run ~19:53). By the 20:55 check
+no new session had started; by 21:57 (two checks later) still nothing, ~2h+ past
+nominal. Runner's bash process was still alive (`ps` showed it sleeping,
+uninterrupted), consistent with the known gap that only the inner `python3 main.py`
+call is wrapped in `caffeinate` — the outer `sleep "$PAUSE"` between sessions is
+not, so a Mac sleep/suspend during that window pauses the shell's sleep too and it
+resumes later than intended once the Mac wakes. Same pattern seen earlier in this
+project's history with the old `--smart-only` runner.
+
+Killed the stuck process tree (`screen -X quit` + explicit `kill` on the orphaned
+bash loop, same two-step needed before since `screen -X quit` alone doesn't always
+reap the inner process) and relaunched via the same `screen -dmS myheritage bash
+/tmp/mh_runner_v3.sh` command. New session confirmed started immediately
+(`main.py --confirm-by-source --max-sources 8` running under `caffeinate`).
+
+**Code changes**: none — this is an operational restart, not a code fix. Wrapping
+the inter-session `sleep` in `caffeinate` too would prevent this outright; not done
+yet, worth doing next time the runner script is touched.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-05] update | Graph accumulation catch-up (backlog from smart-only/extract-confirmed tests)
 
 **Object**: `data/family_graph.json` (`harvested_people`), `graph_updates.jsonl`

@@ -4,6 +4,32 @@
 
 ---
 
+## [2026-08-13] fix | Wrap inter-session sleep in caffeinate — was stretching hours past nominal
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)
+**Scenario**: bugfix (Per Nikita 2026-08-13, after a ~6h unexplained gap between
+sessions was observed and traced)
+**Outcome**: ✅ fixed and applied — runner restarted, new session confirmed running
+
+**What happened**: Flagged as a known gap in the 2026-08-08 stuck-sleep incident
+entry but not fixed then. The runner's inter-session `sleep "$PAUSE"` was a bare
+shell sleep, unlike the `python3 main.py` call which is wrapped in `caffeinate -i`.
+If the Mac went to sleep during that window, the bash `sleep` paused along with it
+and resumed only once the Mac woke — observed repeatedly stretching a nominal
+30-150min pause to hours (most recently ~5h50min between the 10:30 and 18:27
+sessions on 2026-08-13, self-recovered without intervention that time).
+
+Fix: wrap the sleep too — `caffeinate -i sleep "$PAUSE"` instead of bare `sleep
+"$PAUSE"`. Runner killed and relaunched with the fix; new `--confirm-by-source`
+session confirmed started immediately.
+
+**Code changes**: `/tmp/mh_runner_v3.sh` only — ephemeral, not tracked in git, full
+content documented here (and in the 2026-08-05 entry for the rest of the script) so
+it survives the next `/tmp` wipe.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-08] incident | Stuck inter-session sleep (Mac sleep), runner restarted
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)

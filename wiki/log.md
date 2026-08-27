@@ -4,6 +4,50 @@
 
 ---
 
+## [2026-08-28] update | `--sort-by-relationship` — closest relatives first, using MyHeritage's own sort
+
+**Object**: `browser/smart_matches.py`, `main.py`
+**Scenario**: regular (operator request to prioritize by closeness instead of match count)
+**Outcome**: ✅ shipped and verified live — top of list is now direct ancestors, including VIP surnames
+
+**What happened**: Per Nikita 2026-08-28, wanted to go back to the per-match Smart
+Matches flow but process close relatives before distant collateral ones, instead of
+`run_smart_matches_session`'s existing largest-families-first (match count) order.
+Found the matches-by-people page already has a native "Сортировать по:" dropdown
+with a "Родственной связи" (relationship) option, alongside Значению/Количество
+совпадений/Самые последние/Имя/Фамилия — MyHeritage computes this against the real
+tree structure, which is far more accurate than approximating closeness from the
+48-person `ancestors` list in `family_graph.json` (the earlier `priority_list.py`
+approach found zero overlap for exactly this reason — see
+[priority-list](concepts/priority-list.md)).
+
+Added `sort_by` param to `get_people_sorted_by_count()`: `"count"` (default,
+unchanged) or `"relationship"`, which clicks the dropdown to select "Родственной
+связи" before scraping. **Needed a much longer wait than expected** — 3-5s produced
+an empty list (page shell renders immediately but the relationship re-sort query is
+slow server-side); 16-20s was needed before cards actually appeared, similar to the
+`--confirm-by-source` source-list page's slow load. Threaded through
+`run_smart_matches_session()` and exposed as `main.py --sort-by-relationship`.
+
+**Verified live** (read-only list scrape, no confirms): top of the relationship-sorted
+list is Раиса Кузьмина (Бабушка), Хая Ганущинер (Прабабушка), Василий Синчук
+(Прадедушка), Лейб Ганущинер (Прапрадедушка), etc. — genuine close relatives,
+several carrying the VIP Ганущинер surname. This is a read-only ordering check, not
+a confirmed match, so no VIP-alert notification applies yet — that still fires per
+the existing rule once an actual match for one of these people gets confirmed.
+
+**Still applies**: this uses the per-match Smart Match flow (`--smart-only`), which
+remains client-fingerprint WAF-gated in headless mode (see
+[rate-limiting](concepts/rate-limiting.md)) — running it for real needs `--visible
+--wait-for-captcha` with the operator present, same as before. `--sort-by-relationship`
+only changes iteration order, not the WAF situation.
+
+**Code changes**: `browser/smart_matches.py` (`sort_by` param, `_CLICK_TEXT_EXACT`),
+`main.py` (`--sort-by-relationship` flag).
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-13] fix | Wrap inter-session sleep in caffeinate — was stretching hours past nominal
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)

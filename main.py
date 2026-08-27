@@ -4,6 +4,8 @@ MyHeritage Automation Agent — entry point.
 Usage:
   python main.py                     # combined mode: SM then RM per person, largest families first
   python main.py --smart-only        # Smart Matches only
+  python main.py --smart-only --sort-by-relationship  # closest relatives first (MyHeritage's
+                                      # own "Родственной связи" sort) instead of largest-families-first
   python main.py --record-only       # Record Matches only
   python main.py --extract-confirmed # extract data from already-confirmed Smart Matches
                                       # (e.g. matches bulk-confirmed via "Совпадения по
@@ -105,7 +107,7 @@ async def capture_session() -> None:
 
 async def run(
     mode: str, headless: bool, max_matches: int, scroll_rounds: int,
-    wait_for_captcha: bool = False, max_sources: int = 5,
+    wait_for_captcha: bool = False, max_sources: int = 5, sort_by: str = "count",
 ) -> None:
     from playwright.async_api import async_playwright
 
@@ -131,7 +133,7 @@ async def run(
         elif mode == "smart":
             summary = await run_smart_matches_session(
                 page, max_matches=max_matches, scroll_rounds=scroll_rounds,
-                wait_for_captcha=wait_for_captcha,
+                wait_for_captcha=wait_for_captcha, sort_by=sort_by,
             )
         elif mode == "extract_confirmed":
             summary = await run_extract_confirmed_session(
@@ -201,6 +203,10 @@ def main() -> None:
     parser.add_argument("--wait-for-captcha", action="store_true",
                         help="On reCAPTCHA, pause and wait for a human to solve it in the "
                              "visible window instead of aborting (requires --visible)")
+    parser.add_argument("--sort-by-relationship", action="store_true",
+                        help="For --smart-only: process closest relatives first, using "
+                             "MyHeritage's own 'Родственной связи' sort, instead of the "
+                             "default largest-families-first (match count) order")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
@@ -231,6 +237,7 @@ def main() -> None:
         scroll_rounds=args.scroll,
         wait_for_captcha=args.wait_for_captcha,
         max_sources=args.max_sources,
+        sort_by="relationship" if args.sort_by_relationship else "count",
     ))
 
 

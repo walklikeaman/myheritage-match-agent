@@ -563,16 +563,34 @@ async def get_person_match_urls(
     """)
 
 
+_CLICK_TEXT_EXACT = """
+(text) => {
+    const el = [...document.querySelectorAll('*')]
+        .find(e => e.children.length === 0 && e.textContent.trim() === text);
+    if (!el) return 'NOT_FOUND';
+    el.click();
+    return 'OK';
+}
+"""
+
+
 async def get_people_sorted_by_count(
     page: Page,
     match_type: int = 2,
     scroll_rounds: int = 8,
     match_status: int = 32,
+    sort_by: str = "count",
 ) -> list[dict]:
     """
-    Scrape the matches-by-people list with infinite-scroll, sort by match count desc.
+    Scrape the matches-by-people list with infinite-scroll.
     match_type=2 → Smart Matches, match_type=1 → Record Matches.
     match_status=32 → pending, match_status=8 → confirmed (see run_extract_confirmed_session).
+    sort_by="count" (default) → our own sort by match count desc, most efficient first.
+    sort_by="relationship" → use MyHeritage's own "Родственной связи" sort (closest relatives
+    first) instead of our count-based sort — this uses the site's real tree structure, which
+    is far more accurate than approximating closeness from the 48-person ancestors list in
+    family_graph.json. The dropdown's default state on a fresh page load is always "Значению",
+    so switching it is reliable without needing to read current state first.
     """
     list_url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
@@ -580,6 +598,21 @@ async def get_people_sorted_by_count(
     )
     await page.goto(list_url, wait_until="networkidle", timeout=45000)
     await _sleep(5, 7)
+
+    if sort_by == "relationship":
+        res = await page.evaluate(_CLICK_TEXT_EXACT, "Значению")
+        if res == "NOT_FOUND":
+            logger.warning("  Sort dropdown not found — falling back to default (count) order")
+        else:
+            await _sleep(1, 1.5)
+            res2 = await page.evaluate(_CLICK_TEXT_EXACT, "Родственной связи")
+            if res2 == "NOT_FOUND":
+                logger.warning("  'Родственной связи' option not found — falling back to default order")
+            else:
+                # This re-sort recomputes against the whole tree server-side and is much
+                # slower than the default count sort — 3-5s wasn't enough in testing
+                # (empty list), needed ~15-20s before cards actually render.
+                await _sleep(16, 20)
 
     seen_ids: set[str] = set()
     all_people: list[dict] = []
@@ -600,7 +633,9 @@ async def get_people_sorted_by_count(
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await _sleep(3, 5)
 
-    all_people.sort(key=lambda p: p["count"], reverse=True)
+    if sort_by == "count":
+        all_people.sort(key=lambda p: p["count"], reverse=True)
+    # sort_by="relationship": preserve the order the site's own sort already gave us
     return all_people
 
 
@@ -613,12 +648,14 @@ async def run_smart_matches_session(
     max_matches: int = 200,
     scroll_rounds: int = 8,
     wait_for_captcha: bool = False,
+    sort_by: str = "count",
 ) -> dict:
-    """Smart Matches (matchType=2) session — largest families first."""
+    """Smart Matches (matchType=2) session — largest families first, or closest relatives
+    first when sort_by="relationship"."""
     summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
 
-    logger.info("Loading Smart Matches by-people list (sorted by count)…")
-    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds)
+    logger.info(f"Loading Smart Matches by-people list (sorted by {sort_by})…")
+    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds, sort_by=sort_by)
     logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
     for person in people:

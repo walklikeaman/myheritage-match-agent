@@ -4,6 +4,36 @@
 
 ---
 
+## [2026-08-28] incident | Runner down ~8 days (likely Mac restart wiped the screen session)
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)
+**Scenario**: incident (discovered while shipping the sort-by-relationship feature)
+**Outcome**: ✅ resolved — recreated and relaunched, new session confirmed running
+
+**What happened**: Last session before the gap ran cleanly 2026-08-19 21:32-21:41
+(8/8 confirmed, 2542 matches), then went to sleep and never resumed — no further
+`session_source_*.log` files until this entry, 2026-08-28. `screen -ls` found no
+socket at all (not even a dead one), consistent with a Mac restart around
+2026-08-19/20, which both wipes `/tmp` (killing the script file) and kills all
+`screen` sessions outright — nothing survived to restart itself. The standing
+hourly-report chain in the operator's session apparently also lapsed around the same
+time (no reports were given for this whole window), so nobody caught it sooner.
+
+Recreated `/tmp/mh_runner_v3.sh` from the last-known-good version (documented across
+the 2026-08-05 and 2026-08-13 entries) and relaunched. New `--confirm-by-source`
+session confirmed started immediately.
+
+**Not fixed by this entry** (worth doing sometime): the runner has no self-healing
+across a full Mac reboot — a LaunchAgent/launchd plist would survive restarts where
+a bare `screen` session cannot. Flagging rather than building it now since it's out
+of scope for today's actual request (the relationship-sort feature).
+
+**Code changes**: none — operational restart. Runner script content unchanged from
+the 2026-08-13 fix, just re-created since `/tmp` is ephemeral.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-28] update | `--sort-by-relationship` — closest relatives first, using MyHeritage's own sort
 
 **Object**: `browser/smart_matches.py`, `main.py`

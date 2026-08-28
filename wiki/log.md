@@ -4,6 +4,33 @@
 
 ---
 
+## [2026-08-28] incident | Stuck inter-session sleep again despite caffeinate wrap, runner restarted
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)
+**Scenario**: incident (caught by routine hourly monitoring)
+**Outcome**: ✅ resolved — killed and relaunched, new session confirmed running
+
+**What happened**: Session at 13:52 finished cleanly, went to sleep for the nominal
+7422s (~124min, expected next run ~16:05). By 17:17 no new session had started (~72min
+over); by 18:18 (next check) still nothing — same `caffeinate -i sleep 7422` PID
+49634 still alive, ~2h13min past nominal, crossing the 1.5h restart threshold.
+Unlike the 2026-08-08 incident, this is NOT the un-caffeinated-sleep bug (that was
+fixed 2026-08-13 and the sleep here genuinely was wrapped) — `screen -ls` showed the
+session alive the whole time, so this looks like a plain macOS App Nap / sleep
+throttling a long-lived caffeinate child regardless of the `-i` flag, not the same
+root cause. Not investigated further given the fix is identical either way (restart);
+worth revisiting if it keeps recurring.
+
+Killed (`screen -X quit` + explicit `kill` on the orphaned bash loop, same two-step
+as prior incidents) and relaunched via `screen -dmS myheritage bash
+/tmp/mh_runner_v3.sh`. New `--confirm-by-source` session confirmed started
+immediately.
+
+**Code changes**: none — operational restart, script content unchanged.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-28] incident | Runner down ~8 days (likely Mac restart wiped the screen session)
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)

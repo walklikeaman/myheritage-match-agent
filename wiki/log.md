@@ -4,6 +4,49 @@
 
 ---
 
+## [2026-09-01] update | Switched priority from volume to closeness — stopped confirm-by-source runner
+
+**Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`), overall strategy
+**Scenario**: regular (operator decision to reprioritize)
+**Outcome**: ✅ done — background runner stopped, operator moving to manual close-relatives flow
+
+**What happened**: Per Nikita 2026-09-01, after weeks of `--confirm-by-source`
+running unattended and confirming purely by pending-count (with zero regard for
+actual closeness — see [priority-list](concepts/priority-list.md)'s original
+finding that raw pending count doesn't correlate with direct-ancestor overlap),
+operator wants to prioritize close relatives over the distant/collateral matches
+this mode has been grinding through. Since `--confirm-by-source` operates at the
+whole-external-tree level (confirm all-or-nothing per source, no per-person
+relationship data available at that granularity), there is no way to bias it toward
+closeness — that dimension only exists in the per-match `--smart-only` flow via
+`--sort-by-relationship` (MyHeritage's own "Родственной связи" sort, shipped
+2026-08-28).
+
+Given a straight choice between (a) keep the bulk runner going for volume while
+doing sort-by-relationship manually on the side, or (b) drop the bulk runner
+entirely and commit fully to the precise-but-slower per-match flow, operator chose
+(b). Killed the `confirm-by-source` screen session. Going forward, progress comes
+from the operator manually running:
+```
+python3 main.py --smart-only --sort-by-relationship --wait-for-captcha --visible --max 100 --scroll 8 --verbose
+```
+which needs the operator present to solve any captcha (this mode does extract full
+field data per match, unlike confirm-by-source, so it's also strictly better for
+data completeness on the people it does reach — just far slower per match).
+
+**Monitoring implication**: the standing hourly check-in no longer has an unattended
+background process to poll. It should instead check `logs/agent_*.log` (the
+loguru sink main.py always writes to, regardless of mode) for activity since the
+last check, and report whatever the operator's own manual runs produced — there is
+nothing to restart automatically in this mode, since a stuck/dead process here just
+means the operator hasn't started a session, not a bug.
+
+**Code changes**: none. Runner script itself is `/tmp`-ephemeral and now
+intentionally not running.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-08-28] incident | Stuck inter-session sleep again despite caffeinate wrap, runner restarted
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`)

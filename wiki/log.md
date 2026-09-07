@@ -72,6 +72,65 @@ code actually emits on a real WAF hit, plus `Incapsula`.
 was spotted and has not been restarted pending operator confirmation that the
 fix is sufficient — see next log entry / conversation for the decision.
 
+**Canonical `/tmp/mh_runner_smart_v1.sh` content** (the "feat" entry below never
+pasted the actual script — filling that gap now, with the captcha-grep fix
+included, so it can be recreated from this log alone if `/tmp` gets wiped by a
+reboot):
+```bash
+#!/bin/bash
+cd "/Users/walklikeaman/GitHub/My Heritage"
+MAX_MATCHES=100
+
+# Standing runner for --smart-only --sort-by-relationship (2026-09-08). Runs
+# --visible (NOT headless) because headless instant-blocks on the WAF
+# client-fingerprint gate since 2026-07-21 (see wiki/concepts/rate-limiting.md) --
+# --visible does not, confirmed by a clean 100-match / 0-captcha manual run on
+# 2026-09-07. Does NOT pass --wait-for-captcha since no human is present
+# unattended: on a captcha hit, process_one_match() returns status="blocked" and
+# run_smart_matches_session() aborts the session cleanly (see
+# browser/smart_matches.py) instead of hanging on an Enter that will never come --
+# this runner just backs off long and retries later, same pattern as the old
+# confirm-by-source runner (wiki/log.md 2026-08-05).
+rand_pause() {
+    TIER=$(( RANDOM % 20 ))
+    if   [ "$TIER" -lt 10 ]; then BASE=$(( 2700 + RANDOM % 1800 ))   # 45-75min
+    elif [ "$TIER" -lt 17 ]; then BASE=$(( 4500 + RANDOM % 1800 ))   # 75-105min
+    else                          BASE=$(( 6300 + RANDOM % 3600 ))  # 105-165min
+    fi
+    echo $(( BASE + RANDOM % 47 ))
+}
+
+while true; do
+    LOG="logs/session_smart_$(date +%Y%m%d_%H%M%S).log"
+    caffeinate -i python3 main.py --smart-only --sort-by-relationship --visible --max "$MAX_MATCHES" --scroll 8 --verbose > "$LOG" 2>&1
+    EXIT=$?
+
+    # Per CLAUDE.md: run notify_vip.py after every session. Appended to the same
+    # log so the hourly monitoring check-in can surface VIP hits without a live
+    # site check.
+    python3 notify_vip.py >> "$LOG" 2>&1
+
+    # Match only the literal "(captcha)" tag the code emits on a real WAF hit --
+    # a bare "captcha" substring also matches the --wait-for-captcha flag name
+    # inside an unrelated crash traceback (found live 2026-09-08), which wrongly
+    # sent a genuine crash into the 6h captcha backoff instead of the 300s one.
+    if grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
+        PAUSE=21600
+        echo "[runner] captcha/WAF block detected -- sleeping ${PAUSE}s" >> "$LOG"
+    elif [ "$EXIT" -ne 0 ]; then
+        PAUSE=300
+        echo "[runner] crash (exit $EXIT) -- sleeping ${PAUSE}s" >> "$LOG"
+    else
+        PAUSE=$(rand_pause)
+        echo "[runner] clean exit -- sleeping ${PAUSE}s" >> "$LOG"
+    fi
+
+    # 2026-08-13 lesson (see wiki/log.md): wrap the inter-session pause in
+    # caffeinate too, so macOS idle sleep can't stretch it past nominal duration.
+    caffeinate -i sleep "$PAUSE"
+done
+```
+
 **Code changes**: `browser/smart_matches.py`, `config.py`.
 **Updated**: `wiki/log.md`.
 

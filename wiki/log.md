@@ -4,6 +4,79 @@
 
 ---
 
+## [2026-09-08] fix | Stop auto-confirming conflicting merge suggestions in the extract wizard
+
+**Object**: `browser/smart_matches.py` (`process_one_match`), `config.py`
+**Scenario**: incident (operator caught a wrong confirm live on screen)
+**Outcome**: ✅ fixed and shipped — audit of existing data delivered to operator
+
+**What happened**: Nikita watched the `myheritage-smart` runner (launched earlier
+today) confirm a match for **Владимир Иванович Корнієнко (ID 5500110)** and
+recognized the source profile as a different real person. Investigated using
+already-captured `data/graph_updates.jsonl` (no live site check needed) and found
+the mechanism: the extract wizard's own "Выберите X в Вашем семейном дереве: Y"
+disambiguation dialog — used when it isn't sure a source person matches an
+existing tree person — had suggested merging source **Анна Корниенко (Стоцкая)**
+with the tree's existing **Ганна Герасімовна Корнієнко (Зозуля)**, and separately
+source **Иван Корниенко** with tree's **Григорий Корниенко** — different people,
+different maiden names, different birth/death years. `process_one_match()`'s
+"extract all" click accepted whatever the wizard pre-selected by default, with
+zero verification. This directly violated CLAUDE.md's "never auto-save
+conflicting genealogy data — flag for manual review" rule, which had never
+actually been implemented for this flow.
+
+**Fix**: added `_extract_merge_conflicts()` / `_names_conflict()` to
+`browser/smart_matches.py` — parses the wizard's "Выберите X в Вашем семейном
+дереве:\nY" pattern out of the already-captured raw extract text, and flags a
+conflict when X and Y clearly aren't the same person (different maiden name in
+parentheses, or different first name), while excluding the two known-benign
+cases: "Y = Добавить как новую/нового ..." (no existing candidate, adding new —
+correct default) and "Y = Неизвестно/Unknown ..." (enriching a bare placeholder,
+not overwriting a real conflicting record). Normalizes Ukrainian/Russian letter
+variants (і/и, є/е, ї/и, **ё/е** — this one caused a real false positive on "Шлём
+Гланц" vs "Шлем Гланц" during testing) before comparing. Deliberately biased
+toward over-flagging: a false positive costs the operator a couple minutes of
+review, a false negative silently corrupts the tree.
+
+Wired into `process_one_match()` right after the existing graph-snapshot capture
+(Step 3b2) and before the photo-transfer/Save steps: if any conflict is found,
+the match is **not saved** (Confirm already happened server-side by this point
+and can't be undone from here, but Save — the step that actually writes the
+wrong family into the tree — is skipped), a `status="conflict"` result is
+returned instead of `"ok"`, and the conflict is appended to the new
+`data/merge_conflicts.jsonl` (`MERGE_CONFLICTS_FILE` in `config.py`) for a
+durable, discoverable trail.
+
+**Audit of already-confirmed data**: ran the same detector across all of
+`data/graph_updates.jsonl` (validated first against 1754 real "Выберите..."
+dialogs — 282 flagged before the ё/Неизвестно fixes, 265 after, with spot-checked
+samples looking like genuine conflicts, e.g. distinct English royal-lineage
+people and distinct Finnish `Kähkönen`/`Kuokkanen` families being merged).
+**5 people / 8 confirmed matches** from the two most recent sessions (2026-09-07
+manual run, 2026-09-08 automated attempt) are affected, plus **72 people / 257
+matches** historically (2026-07-19/20/21, 2026-08-02/03) — the July batch mostly
+distant European nobility lines, which are especially conflation-prone. Delivered
+the full breakdown to the operator as `data/conflict_audit_2026-09-08.md`
+(gitignored — local data, not committed) for manual review/correction on the
+site; the recent 8 are called out as priority.
+
+**Also fixed while in the runner script**: `mh_runner_smart_v1.sh`'s captcha
+detection grep (`captcha\|reCAPTCHA\|Incapsula`) was matching the literal
+`--wait-for-captcha` parameter name inside an unrelated crash traceback (a
+`Page.evaluate: Execution context was destroyed` navigation-race error hit
+during today's automated run), sending a plain crash into the 6h captcha backoff
+instead of the 300s crash backoff. Narrowed to the literal `(captcha)` tag the
+code actually emits on a real WAF hit, plus `Incapsula`.
+
+**Not yet resumed**: `myheritage-smart` runner was stopped when the bad confirm
+was spotted and has not been restarted pending operator confirmation that the
+fix is sufficient — see next log entry / conversation for the decision.
+
+**Code changes**: `browser/smart_matches.py`, `config.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] feat | Automated the close-relatives flow — new `myheritage-smart` background runner
 
 **Object**: `/tmp/mh_runner_smart_v1.sh` (screen session `myheritage-smart`)

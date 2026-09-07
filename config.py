@@ -52,6 +52,7 @@ DISCOVERIES_URL = f"{BASE_URL}/discoveries"
 # Database
 DB_FILE = DATA_DIR / "agent.db"
 GRAPH_UPDATES_FILE = DATA_DIR / "graph_updates.jsonl"
+MERGE_CONFLICTS_FILE = DATA_DIR / "merge_conflicts.jsonl"
 
 # Extraction priority order (what to save when enriching)
 EXTRACTION_PRIORITY = [

@@ -12,6 +12,7 @@ Flow per match:
 import asyncio
 import json
 import random
+import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -28,6 +29,7 @@ from config import (
     PERSON_DELAY_MIN,
     PERSON_DELAY_MAX,
     GRAPH_UPDATES_FILE,
+    MERGE_CONFLICTS_FILE,
 )
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
@@ -176,6 +178,81 @@ def _append_graph_update(record: dict) -> None:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:
         logger.debug(f"  Graph update write skipped: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Merge-conflict detection (2026-09-08)
+#
+# The extract wizard sometimes asks "Выберите <source person> в Вашем семейном
+# дереве: <suggested existing person>" when it isn't sure two profiles are the
+# same, and pre-selects a suggestion. Confirmed live 2026-09-08 (see
+# wiki/log.md) that the suggestion can be a completely different real person
+# (different parents/spouse, different birth-death years) — e.g. it offered to
+# merge source "Анна Корниенко (Стоцкая)" with existing tree person "Ганна
+# Герасімовна Корнієнко (Зозуля)". The old extract-all click accepted whatever
+# was pre-selected without checking. CLAUDE.md: never auto-save conflicting
+# genealogy data — flag for manual review instead.
+# ---------------------------------------------------------------------------
+
+_MERGE_CHOICE_RE = re.compile(r"Выберите (.+?) в Вашем семейном дереве:\n(.+?)\n")
+
+_CYRILLIC_VARIANT_TABLE = str.maketrans({
+    "і": "и", "І": "И", "є": "е", "Є": "Е", "ґ": "г", "Ґ": "Г", "ї": "и", "Ї": "И",
+    "ё": "е", "Ё": "Е",
+})
+
+_UNKNOWN_PLACEHOLDER_RE = re.compile(r"^(неизвестно|неизвестна|unknown)\b", re.IGNORECASE)
+
+
+def _normalize_name(name: str) -> str:
+    return name.translate(_CYRILLIC_VARIANT_TABLE).lower().strip()
+
+
+def _names_conflict(source_name: str, suggested_name: str) -> bool:
+    """Best-effort, deliberately biased toward over-flagging: a false positive
+    just costs the operator a couple minutes of manual review on the site; a
+    false negative silently writes a stranger's family into the tree."""
+    src, sug = _normalize_name(source_name), _normalize_name(suggested_name)
+    if src == sug:
+        return False
+    # Tree side is a bare "Неизвестно <surname>" placeholder — merging a named
+    # record into it is enrichment, not a conflict.
+    if _UNKNOWN_PLACEHOLDER_RE.match(sug):
+        return False
+    src_paren = re.search(r"\(([^)]+)\)", src)
+    sug_paren = re.search(r"\(([^)]+)\)", sug)
+    if src_paren and sug_paren:
+        # Maiden/married name in parentheses is the most reliable signal when
+        # both sides have one (e.g. "(Стоцкая)" vs "(Зозуля)").
+        return src_paren.group(1).strip() != sug_paren.group(1).strip()
+    src_first = src.split()[0] if src.split() else ""
+    sug_first = sug.split()[0] if sug.split() else ""
+    return src_first != sug_first
+
+
+def _extract_merge_conflicts(raw_text: str) -> list[tuple[str, str]]:
+    conflicts = []
+    for source_name, suggested_name in _MERGE_CHOICE_RE.findall(raw_text):
+        source_name, suggested_name = source_name.strip(), suggested_name.strip()
+        if suggested_name.startswith("Добавить как"):
+            continue  # "add as new X" — no existing candidate, not a merge
+        if _names_conflict(source_name, suggested_name):
+            conflicts.append((source_name, suggested_name))
+    return conflicts
+
+
+def _append_conflict_flag(match_url: str, conflicts: list[tuple[str, str]]) -> None:
+    """Append-only write — one JSON object per line. Never raises."""
+    try:
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "match_url": match_url,
+            "conflicts": [{"source": s, "suggested": t} for s, t in conflicts],
+        }
+        with open(MERGE_CONFLICTS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logger.debug(f"  Conflict flag write skipped: {e}")
 
 # WAF bot-challenge served IN PLACE OF a page (HTTP 200, no Angular render).
 # Recon 2026-06-27: MyHeritage FraudProtection serves a Google reCAPTCHA Enterprise
@@ -454,6 +531,24 @@ async def process_one_match(
     snapshot = await _capture_graph_snapshot(page, match_url)
     if snapshot:
         _append_graph_update(snapshot)
+
+    # --- Step 3b3: Refuse to auto-save a conflicting merge suggestion ---
+    # See module docstring above. Confirm (Step 2) already happened and can't be
+    # undone from here, but Save — the step that actually writes the wrong
+    # family into the tree — is skipped, and the conflict is flagged to
+    # MERGE_CONFLICTS_FILE for manual review on the site.
+    if snapshot:
+        conflicts = _extract_merge_conflicts(snapshot["raw_text"])
+        if conflicts:
+            for src_name, sug_name in conflicts:
+                logger.warning(
+                    f"  Conflicting merge suggestion — source '{src_name}' vs "
+                    f"tree '{sug_name}' — skipping save for manual review"
+                )
+            _append_conflict_flag(match_url, conflicts)
+            result["status"] = "conflict"
+            result["fields"] = fields
+            return result
 
     # --- Step 3c: Transfer photos ---
     photos_clicked = await page.evaluate("""

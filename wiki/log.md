@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-09-08] update | Resumed `myheritage-smart` runner after the conflict-detection fix
+
+**Object**: `screen` session `myheritage-smart`
+**Scenario**: regular (operator confirmed the fix is sufficient to resume)
+**Outcome**: ✅ running — screen session confirmed alive
+
+**What happened**: Per Nikita 2026-09-08, after the merge-conflict fix (previous
+log entry) and the delivered audit of 265 historical conflicts, relaunched
+`/tmp/mh_runner_smart_v1.sh` via `SCREENDIR=/tmp/screendir-mh screen -dmS
+myheritage-smart bash /tmp/mh_runner_smart_v1.sh`. Confirmed alive via
+`screen -ls` and `ps aux`. No code changes since the fix commit — this is the
+same script whose canonical content is pasted in the previous log entry.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] fix | Stop auto-confirming conflicting merge suggestions in the extract wizard
 
 **Object**: `browser/smart_matches.py` (`process_one_match`), `config.py`

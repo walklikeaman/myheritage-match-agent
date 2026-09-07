@@ -4,6 +4,39 @@
 
 ---
 
+## [2026-09-07] update | First manual `--sort-by-relationship` run — 100 matches, VIP Ганущинер branch confirmed
+
+**Object**: `--smart-only --sort-by-relationship` session (operator-run, 15:00-16:55)
+**Scenario**: regular (first live run of the flow adopted 2026-09-01)
+**Outcome**: ✅ success — 100/100 matches processed, session cap reached cleanly, no captcha
+
+**What happened**: Nikita ran the manual close-relatives flow for the first time
+since dropping `--confirm-by-source`:
+```
+python3 main.py --smart-only --sort-by-relationship --wait-for-captcha --visible --max 100 --scroll 8 --verbose
+```
+List load took ~68s (longer than the count-sort default, consistent with the
+2026-08-28 finding that the relationship re-sort needs extra time), then processed
+cleanly to the 100-match cap with only one `ERROR (0 fields)` outlier (`total: 17`,
+no captcha involved) among 99 successful saves. Browser window closed on its own
+once the cap was hit — expected behavior, not a crash.
+
+`notify_vip.py` found 18 hits — all **Ганущинер**, no Рассадина. Checked
+`graph_updates.jsonl` navigator context directly: the hits are the already-known
+direct-line cluster documented 2026-08-28 — Лейб (Лев) Мордухович Ганущинер, his
+parents Мордха Евсеевич Ганущинер and Хая Ганущинер, and siblings/children
+(Хая/Клара Кузьмина, Рива Медведева, Голда Глуховская, Мириль Школьникова, etc.) —
+surfacing as navigator/relative context on matches for their descendants. This is
+the closeness-first sort working as intended (surfacing the direct VIP branch
+early), not a newly discovered ancestor — no PushNotification sent (terminal was
+active, and per `notify_vip.py`'s own docstring these hits still need manual
+generation verification before treating any single one as a *new* direct-line find).
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-01] update | Switched priority from volume to closeness — stopped confirm-by-source runner
 
 **Object**: `/tmp/mh_runner_v3.sh` (screen session `myheritage`), overall strategy

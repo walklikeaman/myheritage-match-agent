@@ -4,6 +4,52 @@
 
 ---
 
+## [2026-09-08] feat | Automated the close-relatives flow — new `myheritage-smart` background runner
+
+**Object**: `/tmp/mh_runner_smart_v1.sh` (screen session `myheritage-smart`)
+**Scenario**: regular (operator wants hands-off automation, not a manual command each time)
+**Outcome**: ✅ launched — screen session confirmed alive, first cycle running
+
+**What happened**: Per Nikita 2026-09-08, after the clean 100/0-captcha manual
+`--sort-by-relationship` run on 2026-09-07, operator asked to stop launching it by
+hand and automate it fully. Built a new standing runner analogous to the old
+`--confirm-by-source` one (`/tmp/mh_runner_v3.sh`, retired 2026-09-01), but for
+`--smart-only --sort-by-relationship`:
+
+- Runs `--visible` (not headless) — headless instant-blocks on the WAF
+  client-fingerprint gate since 2026-07-21 (see
+  [rate-limiting](concepts/rate-limiting.md)); `--visible` does not, per the
+  2026-09-07 clean run.
+- Does **not** pass `--wait-for-captcha` — no human is present unattended, and
+  confirmed in code (`browser/smart_matches.py:678-684`) that without it, a
+  captcha hit sets `status="blocked"` and the session aborts cleanly (not a
+  hang), same circuit-breaker the old runner relied on.
+- On captcha/WAF signal in the log: 6h backoff. On crash: 300s backoff.
+  Otherwise: same randomized 45-165min pause tiers as the old runner, wrapped in
+  `caffeinate` for both the session and the pause (2026-08-13 lesson).
+- Runs `python3 notify_vip.py` after every session per the CLAUDE.md rule,
+  appending its output to the same session log so the hourly monitoring
+  check-in can surface VIP hits without a live site check.
+- `--max 100` per session (matches the validated manual run size).
+
+Launched via `SCREENDIR=/tmp/screendir-mh screen -dmS myheritage-smart bash
+/tmp/mh_runner_smart_v1.sh`. `screen -ls` confirms it alive; first session
+already processing matches. Logs to `logs/session_smart_*.log` (new prefix,
+distinct from the retired `session_source_*.log`).
+
+**Caveat flagged to operator**: this pops a real (non-headless) Chromium window
+periodically while the Mac is unattended — untested how it behaves if the
+screen locks or sleeps despite `caffeinate -i`; will be visible in the next
+sessions' exit codes if it's a problem, not silently broken.
+
+**Code changes**: none in the repo — `/tmp/mh_runner_smart_v1.sh` is
+`/tmp`-ephemeral (same resilience caveat as the old runner: wiped on reboot,
+must be recreated from this log entry's canonical content if `screen -ls` for
+`myheritage-smart` comes back empty).
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-07] update | First manual `--sort-by-relationship` run — 100 matches, VIP Ганущинер branch confirmed
 
 **Object**: `--smart-only --sort-by-relationship` session (operator-run, 15:00-16:55)

@@ -4,6 +4,37 @@
 
 ---
 
+## [2026-09-08] update | VIP direct-ancestor hit — Мария Михайловна Колонова (Разсадина) confirmed and saved
+
+**Object**: `data/graph_updates.jsonl`, VIP alert rule (see CLAUDE.md, `notify_vip.py`)
+**Scenario**: regular (VIP surname check after routine `myheritage-smart` sessions)
+**Outcome**: ✅ direct-line VIP ancestor confirmed with real field data, saved to tree
+
+**What happened**: `notify_vip.py` flagged 5 **Разсадина** hits (old spelling of
+Рассадина) for the first time in this whole project's history — every prior
+check across dozens of sessions came back 0. Verified the actual data (not just
+the surname string) by reading `data/graph_updates.jsonl` navigator/raw_text
+directly: **Мария Михайловна Колонова (Разсадина)**, wife of Георгий Тимофеевич
+Колонов, is the mother of **Юрий Георгиевич Колонов**, whose daughter is
+**Марина Юрьевна Наконечная (Колонова)** — this exactly matches CLAUDE.md's VIP
+description ("прабабушка Мария Рассадина, мать деда Юрия Колонова"), i.e. this
+is confirmed **direct maternal-line** ancestry, not a collateral relative.
+
+Cross-checked against the actual session logs (not just the extracted
+snapshot): both matches for Раиса Васильевна Кузьмина/Скороходова (ID 5000012,
+5520201) that surfaced this family were **saved successfully** — 46 fields + 21
+photos, and 22 fields + 15 photos — not blocked by the merge-conflict detector,
+so this data is genuinely in the tree now, not just captured raw and pending.
+
+Per CLAUDE.md's VIP alert rule, attempted `PushNotification` — not delivered
+("Mobile push not sent — Remote Control inactive"), so flagging prominently
+here and in the live chat instead.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] fix | Treat bare "?" tree-side placeholders as non-conflicts too
 
 **Object**: `browser/smart_matches.py` (`_UNKNOWN_PLACEHOLDER_RE`)

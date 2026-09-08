@@ -4,6 +4,33 @@
 
 ---
 
+## [2026-09-08] incident | Mac reboot wiped `/tmp` — recreated runner from wiki, no data lost
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`
+**Scenario**: regular (documented reboot-recovery procedure)
+**Outcome**: ✅ recovered — runner recreated and relaunched, zero session loss
+
+**What happened**: Found `screen -ls` empty and `/tmp/mh_runner_smart_v1.sh`
+missing — Mac rebooted, wiping `/tmp` as expected (same failure mode as the
+old confirm-by-source runner, documented repeatedly through August). Recreated
+the script from the canonical content pasted into the 2026-09-08 "fix | Stop
+auto-confirming conflicting merge suggestions" log entry (byte-for-byte, this
+was the first real test that pasting the canonical script there actually
+works for recovery) and relaunched via `SCREENDIR=/tmp/screendir-mh screen
+-dmS myheritage-smart bash /tmp/mh_runner_smart_v1.sh`. Confirmed alive via
+`screen -ls`/`ps aux`.
+
+Checked the last session before the gap
+(`logs/session_smart_20260908_195815.log`): it had already completed cleanly
+(98 saved, 2 conflicts, clean exit into a 4355s pause) before the reboot hit —
+so this happened during the inter-session sleep, not mid-session. No
+in-progress work was lost.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] update | Live-verified the 5 priority conflicts on-site — confirmed real, undo button available
 
 **Object**: 7 match-compare URLs (5 people) from `data/conflict_audit_2026-09-08.md`

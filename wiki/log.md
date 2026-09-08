@@ -4,6 +4,40 @@
 
 ---
 
+## [2026-09-08] update | Live-verified the 5 priority conflicts on-site — confirmed real, undo button available
+
+**Object**: 7 match-compare URLs (5 people) from `data/conflict_audit_2026-09-08.md`
+**Scenario**: regular (operator explicitly asked to check these live)
+**Outcome**: ✅ verified — all 5 confirmed on the site, one shows a real duplicate person already in the tree
+
+**What happened**: Per Nikita's explicit request, navigated (read-only — no
+clicks) to the priority-section match-compare URLs using the project's own
+Playwright session, one throwaway `_probe_check_conflicts.py` (deleted after).
+All show `"Совпадение подтверждено сен 7/8, 2026"` and, critically, an
+**"Отменить подтверждение"** (undo confirm) link/button on the page — so the
+operator can revert these from the site UI directly.
+
+Pulled the full "Сравнение семейных деревьев" section for **Владимир Иванович
+Корниенко (5500110)** as a concrete example: **Григорий Корниенко (1910-1989)
+now appears twice** in the tree comparison — once married to Ганна Герасімовна
+Зозуля (the pre-existing, correct tree data) and once to Анна Стоцкая (the
+wrongly-merged conflicting data) — visually confirming the bad merge already
+happened. Did not click "Отменить подтверждение" or attempt any tree edit —
+per CLAUDE.md, undoing/cleaning up already-merged conflicting data is a
+decision for manual review, not something to automate.
+
+**Also answered inline**: operator asked where the Мария Колонова (Разсадина)
+match came from — traced via `raw_text`'s "На сайте X управляемом Y" header to
+external tree **"Наше большое древо"**, managed by MyHeritage user **Роман
+Туркенич** (a surname that also appears independently in the conflict audit,
+for the Туркенич family conflicts — same external contributor, unrelated
+finding).
+
+**Code changes**: none (probe script deleted after use, per convention).
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] update | VIP direct-ancestor hit — Мария Михайловна Колонова (Разсадина) confirmed and saved
 
 **Object**: `data/graph_updates.jsonl`, VIP alert rule (see CLAUDE.md, `notify_vip.py`)

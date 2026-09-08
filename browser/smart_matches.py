@@ -201,7 +201,9 @@ _CYRILLIC_VARIANT_TABLE = str.maketrans({
     "ё": "е", "Ё": "Е",
 })
 
-_UNKNOWN_PLACEHOLDER_RE = re.compile(r"^(неизвестно|неизвестна|unknown)\b", re.IGNORECASE)
+_UNKNOWN_PLACEHOLDER_RE = re.compile(
+    r"^(неизвестно|неизвестна|unknown)\b|^[?\s]+$", re.IGNORECASE
+)
 
 
 def _normalize_name(name: str) -> str:

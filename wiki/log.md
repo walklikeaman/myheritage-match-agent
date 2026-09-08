@@ -4,6 +4,29 @@
 
 ---
 
+## [2026-09-08] fix | Treat bare "?" tree-side placeholders as non-conflicts too
+
+**Object**: `browser/smart_matches.py` (`_UNKNOWN_PLACEHOLDER_RE`)
+**Scenario**: bugfix (found during routine hourly monitoring of live output)
+**Outcome**: ✅ fixed and shipped
+
+**What happened**: The 12:26-13:42 session showed an elevated conflict rate
+(20/100 vs the typical 1-9 seen in prior sessions) — spot-checking the actual
+`Conflicting merge suggestion` log lines found most of the spike was one
+repeating false positive: source `"אבא/אמא של זונדל זוננברג"` ("father/mother of
+Zundel Zonnenberg") being flagged against tree-side `"? ?"`. `"?"` is the same
+kind of empty-name placeholder as `"Неизвестно"`/`"Unknown"` (already exempted
+2026-09-08 earlier today), just a different UI rendering MyHeritage uses for it
+— `_UNKNOWN_PLACEHOLDER_RE` didn't cover it. The other conflicts in that same
+session (e.g. Hebrew `אברהם סברדלוב` vs `דוד סברדלוב` — different first names,
+same surname) looked like genuine catches, so the elevated count was mostly
+noise from this one gap, not a new problem with the detector itself.
+
+**Code changes**: `browser/smart_matches.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] update | Resumed `myheritage-smart` runner after the conflict-detection fix
 
 **Object**: `screen` session `myheritage-smart`

@@ -4,6 +4,34 @@
 
 ---
 
+## [2026-09-09] incident | Stuck inter-session sleep again despite caffeinate — killed and restarted
+
+**Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process
+**Scenario**: incident (recurrence of the 2026-08-13/08-28 stuck-sleep bug, now on the new smart runner)
+**Outcome**: ✅ recovered — killed and relaunched, no data lost (was mid-pause, not mid-session)
+
+**What happened**: Routine monitoring found `caffeinate -i sleep 4795` (nominal
+~80min pause, started 06:04) still alive at 14:39 — over **8.5 hours** past
+nominal, `screen` itself still reporting alive the whole time. This is the same
+recurring failure mode documented for the old confirm-by-source runner
+(2026-08-13 fix, recurred 2026-08-28 despite the fix) — apparently the
+caffeinate wrap doesn't reliably prevent it, root cause still not fully
+diagnosed. Per standing procedure: killed (`screen -X quit` + `pkill` on the
+runner script and the stuck sleep) and relaunched via `SCREENDIR=/tmp/screendir-mh
+screen -dmS myheritage-smart bash /tmp/mh_runner_smart_v1.sh`. Confirmed alive.
+No session was interrupted — this happened during the inter-session pause, not
+mid-run.
+
+**Not re-diagnosed further** — same pragmatic choice as 2026-08-28: restart
+over deep-dive, since it's intermittent and low-severity (self-heals on the
+next monitoring check, worst case a multi-hour gap in matching, not data loss
+or corruption).
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-08] incident | Mac reboot wiped `/tmp` — recreated runner from wiki, no data lost
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`

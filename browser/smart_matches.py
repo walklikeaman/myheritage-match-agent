@@ -205,9 +205,36 @@ _UNKNOWN_PLACEHOLDER_RE = re.compile(
     r"^(неизвестно|неизвестна|unknown)\b|^[?\s]+$", re.IGNORECASE
 )
 
+_HEBREW_RE = re.compile(r"[֐-׿]")
+
+# "לבית"/"בלבית" (Hebrew "née"/"of the house of") and "born"/"nee"/"née" wrap a
+# maiden name inside the parens without being part of the name itself -- found
+# live 2026-09-10: source paren "(לבית Reifman)" vs tree paren "(Reifman)" is
+# the SAME surname, not a conflict, once this connector is stripped.
+_NAME_CONNECTOR_RE = re.compile(r"\b(לבית|בלבית|born|n[eé]e)\b", re.IGNORECASE)
+
+# Hebrew honorific/relational titles that can prefix a name ("רבי" = Rabbi,
+# 'הרה"ח' = an abbreviated rabbinic/chassidic title, "מרת"/"גברת" = Mrs./Lady,
+# "מר" = Mr.) -- found live 2026-09-10 causing false-positive conflicts where
+# the title, not the actual name, was compared as the "first token" (e.g. source
+# 'Chaim Radzyner' vs tree 'הרה"ח חיים רדזינר Radziner' is the same person).
+_HONORIFIC_PREFIX_RE = re.compile(r'^(הרה"ח|הרב|רבי|רב|מרת|גברת|מר)\s+')
+
 
 def _normalize_name(name: str) -> str:
     return name.translate(_CYRILLIC_VARIANT_TABLE).lower().strip()
+
+
+def _strip_honorifics(name: str) -> str:
+    prev = None
+    while prev != name:
+        prev = name
+        name = _HONORIFIC_PREFIX_RE.sub("", name).strip()
+    return name
+
+
+def _has_hebrew(s: str) -> bool:
+    return bool(_HEBREW_RE.search(s))
 
 
 def _names_conflict(source_name: str, suggested_name: str) -> bool:
@@ -221,14 +248,26 @@ def _names_conflict(source_name: str, suggested_name: str) -> bool:
     # record into it is enrichment, not a conflict.
     if _UNKNOWN_PLACEHOLDER_RE.match(sug):
         return False
+    # Cross-script (Hebrew vs non-Hebrew) comparison is unreliable without real
+    # transliteration -- MyHeritage often renders the same person in Hebrew on
+    # one side and Latin on the other, or combines both scripts into one
+    # string (including inside the maiden-name parens). Checked here, before
+    # either the paren or first-token comparison below, since both are
+    # unreliable across scripts. Don't flag these — err toward letting them
+    # through rather than blocking a legitimate match we can't judge.
+    if _has_hebrew(src) != _has_hebrew(sug):
+        return False
     src_paren = re.search(r"\(([^)]+)\)", src)
     sug_paren = re.search(r"\(([^)]+)\)", sug)
     if src_paren and sug_paren:
         # Maiden/married name in parentheses is the most reliable signal when
         # both sides have one (e.g. "(Стоцкая)" vs "(Зозуля)").
-        return src_paren.group(1).strip() != sug_paren.group(1).strip()
-    src_first = src.split()[0] if src.split() else ""
-    sug_first = sug.split()[0] if sug.split() else ""
+        src_p = _NAME_CONNECTOR_RE.sub("", src_paren.group(1)).strip()
+        sug_p = _NAME_CONNECTOR_RE.sub("", sug_paren.group(1)).strip()
+        return src_p != sug_p
+    src_stripped, sug_stripped = _strip_honorifics(src), _strip_honorifics(sug)
+    src_first = src_stripped.split()[0] if src_stripped.split() else ""
+    sug_first = sug_stripped.split()[0] if sug_stripped.split() else ""
     return src_first != sug_first
 
 

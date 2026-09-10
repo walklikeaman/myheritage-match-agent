@@ -52,6 +52,56 @@ compare page doesn't expose that deeper data before Confirm.
 
 ---
 
+## [2026-09-10] fix | Hebrew honorifics/cross-script names caused ~59% false-positive conflicts
+
+**Object**: `browser/smart_matches.py` (`_names_conflict`)
+**Scenario**: bugfix (operator asked to review the first 5 pre-confirm conflict examples)
+**Outcome**: ✅ fixed and shipped — 269/457 accumulated conflict pairs (59%) reclassified as false positives
+
+**What happened**: Reviewed the first 5 `pre_confirm=true` conflicts by hand at
+Nikita's request and found 4 of 5 were false positives, all from the same root
+cause: `_names_conflict()`'s first-token/paren comparison breaks on Hebrew data
+in three specific ways —
+1. Hebrew honorific/relational title prefixes (`רבי`=Rabbi, `הרה"ח`=a
+   rabbinic/chassidic title, `מרת`/`גברת`=Mrs., `מר`=Mr.) being compared as if
+   they were the actual first name (e.g. tree `הרה"ח חיים רדזינר Radziner` vs
+   source `Chaim Radzyner` — same person, "הרה"ח" isn't part of the name).
+2. Composite Hebrew+Latin name strings (MyHeritage sometimes renders one name
+   as `אברהם יחזקאל Avraham Yehezkel לוין...` — Hebrew form immediately
+   followed by its Latin transliteration in the same field) compared
+   token-by-token against a source that only has the Latin form.
+3. The Hebrew word for "née" (`לבית`/`בלבית`) sitting inside the maiden-name
+   parentheses, so `(לבית Reifman)` didn't string-equal `(Reifman)` even
+   though it's the same surname.
+
+Fixed by: stripping the honorific-prefix set before taking the first token;
+stripping `לבית`/`בלבית`/`born`/`née` from parenthetical content before
+comparing; and — the general-purpose fix underlying all three — treating any
+comparison where exactly one side contains Hebrew characters as
+**unjudgeable, not a conflict**, since comparing across script without real
+transliteration is unreliable in either direction. Verified against 10 hand-picked
+cases (all 4 found false positives now clear; the original Корниенко,
+Sverdlov, and Манус conflicts from 2026-09-08/09 still correctly flag).
+
+Re-ran the new logic against every conflict pair already sitting in
+`data/merge_conflicts.jsonl`: of 457 total pairs, **269 (59%) no longer flag** —
+the real number of likely-genuine conflicts is 188, not 457. This does not
+retroactively fix anything already confirmed/saved before today — see the
+2026-09-08 conflict audit (`data/conflict_audit_2026-09-08.md`) for that
+backlog, which should be treated as similarly overstated until re-run with
+this fix.
+
+**Known residual gap, not fixed**: pure spelling/transliteration variance
+within the same script (e.g. `Phaiga` vs `Fajga`, both Latin, same Yiddish
+name) still isn't resolved and can still false-positive — this would need real
+fuzzy/phonetic name matching, out of scope for now. Left as a known limitation
+rather than risking an unreliable phonetic-matching heuristic.
+
+**Code changes**: `browser/smart_matches.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-09] incident | Stuck inter-session sleep again despite caffeinate — killed and restarted
 
 **Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process

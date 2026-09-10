@@ -4,6 +4,38 @@
 
 ---
 
+## [2026-09-10] incident | Stuck inter-session sleep recurred a third time — killed and restarted
+
+**Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process
+**Scenario**: incident (recurrence of the 2026-08-13/08-28/09-09 stuck-sleep bug)
+**Outcome**: ✅ recovered — killed and relaunched, no data lost (mid-pause, not mid-session)
+
+**What happened**: Routine monitoring found `caffeinate -i sleep 3912` (nominal
+~65min pause, started 11:51) still alive at 17:34 — over **4.5 hours** past
+nominal, `screen` reporting alive throughout. Same unresolved recurring failure
+as 2026-09-09 (which itself was a recurrence of the 2026-08-13/08-28 bug on the
+old confirm-by-source runner) — the caffeinate wrap still doesn't reliably
+prevent this on whatever schedule triggers it. Killed
+(`screen -X quit` + `pkill` on the runner script and the stuck sleep) and
+relaunched via `SCREENDIR=/tmp/screendir-mh screen -dmS myheritage-smart bash
+/tmp/mh_runner_smart_v1.sh`. Confirmed alive. The prior session (11:08-11:51)
+had already completed cleanly (7 saved, 93 conflicts — still the Orenstein/
+Oren/Klonsky cluster) before the stuck pause, so nothing was lost.
+
+**Still not root-caused** — three occurrences now (2026-08-13→08-28,
+2026-09-09, 2026-09-10) with the same "restart over deep-dive" call each time,
+since it's intermittent, self-detected within an hour by routine monitoring,
+and low severity (a multi-hour gap in matching, never data loss/corruption).
+If this keeps recurring at increasing frequency, worth revisiting — e.g.
+whether `caffeinate -i` is actually sufficient vs. needing `-s` (prevent
+system sleep, not just idle sleep) given this is a MacBook that may be
+closing/sleeping on its own schedule regardless of process-level caffeinate.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-10] feat | Check for conflicts BEFORE confirming, not just before saving
 
 **Object**: `browser/smart_matches.py` (`process_one_match`), `wiki/concepts/selectors.md`

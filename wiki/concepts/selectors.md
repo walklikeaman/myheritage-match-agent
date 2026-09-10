@@ -1,11 +1,11 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-07-17
-sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17]
+updated: 2026-09-10
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10]
 confidence: high
 status: active
-relates_to: [smart-matches, record-matches, data-extraction]
+relates_to: [smart-matches, record-matches, data-extraction, match-evaluation]
 staleness_window: 30d
 tags: [selectors, verified]
 ---
@@ -46,6 +46,31 @@ URL: `/discovery-hub/{TREE_ID}/match-compare/{matchId}?lang=RU`
 | Already confirmed | body text includes `подтверждено` | Skip check before confirm |
 
 **After clicking "Подтвердить совпадение":** page navigates to `showExtractWizard` URL (15s+ wait needed for Angular render).
+
+### Match-compare page — pre-confirm relatives comparison (2026-09-10)
+
+Live recon (see wiki/log.md 2026-09-10) found that the compare page renders a full
+per-relative comparison **before** the Confirm button is ever clicked — the
+`.compare_trees` visual widget is a zoomable canvas-like tree diagram (not worth
+scraping), but a separate, plain-DOM "Родственники" section right below it lists
+every relative slot as clean, readable elements:
+
+| Element | Selector | Notes |
+|---------|----------|-------|
+| One relative row | `.compare_item[data-automations="individual_row"]` | One per relative slot |
+| Existing tree person's side | `.individual` within a row | Empty (`<!---->`) if no existing match |
+| No-existing-match marker | `.individual .missing_relative` present | `relativeData.relative` was falsy |
+| Existing person's name | `.individual .individual_name` (`bdi`) | Only present when not missing |
+| Source's proposed person's side | `.other_individual` within a row | Always present when the row exists |
+| Source's proposed name | `.other_individual .individual_name` (`bdi`) | |
+| "New info" badge | `.label.relative` text `Новая информация` | Shown when `relativeData.status === 'new'` |
+
+Verified live across 15 pending (unconfirmed) matches: a person with an existing
+name in `.individual` (not `missing_relative`) that clearly differs from the
+source's `.other_individual` name is a genuine conflict signal, visible **before**
+confirming — see [match-evaluation](match-evaluation.md) for how this is now used
+to skip a match entirely instead of confirming first and discovering the
+mismatch only in the post-confirm wizard.
 
 ### Wizard page (showExtractWizard)
 URL: `/research/collection-1/семейные-деревья-myheritage?action=showExtractWizard&itemId=...&indId=...&s=...`

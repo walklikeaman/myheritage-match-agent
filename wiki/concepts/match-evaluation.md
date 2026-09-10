@@ -33,6 +33,19 @@ error during processing → decision = "error" → log error, move on
 
 These go to `flagged_matches` table with full match JSON for human review.
 
+**Status (2026-09-10): checked BEFORE confirming, not just before saving.**
+The 2026-09-08 version below caught conflicts only after `Confirm` had already
+been clicked — the match link on MyHeritage's side was already created by the
+time a conflict was found, even though Save was skipped. Per Nikita 2026-09-10
+("сначала посмотри, тот человек или нет, а не постфактум"), moved the check
+earlier: the compare page already renders a full relatives comparison (see
+[selectors](selectors.md#match-compare-page--pre-confirm-relatives-comparison-2026-09-10))
+before Confirm is clicked, so `_pre_confirm_conflicts()` now runs on that data
+first and skips the match entirely (never clicks Confirm) when it finds a clear
+mismatch. The original post-confirm check (`_extract_merge_conflicts()`) stays
+in place as a second safety net, since the wizard's "expand additional
+relatives" step can surface people not shown on the initial compare page.
+
 **Status (2026-09-08): `name_mismatch` implemented, the other two are not.**
 This design was written 2026-06-23 and stayed unimplemented for months — the
 `--smart-only` flow shipped without any conflict check at all, and it took a

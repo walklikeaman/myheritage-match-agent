@@ -243,18 +243,56 @@ def _extract_merge_conflicts(raw_text: str) -> list[tuple[str, str]]:
     return conflicts
 
 
-def _append_conflict_flag(match_url: str, conflicts: list[tuple[str, str]]) -> None:
+def _append_conflict_flag(
+    match_url: str, conflicts: list[tuple[str, str]], pre_confirm: bool = False
+) -> None:
     """Append-only write — one JSON object per line. Never raises."""
     try:
         record = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "match_url": match_url,
+            "pre_confirm": pre_confirm,
             "conflicts": [{"source": s, "suggested": t} for s, t in conflicts],
         }
         with open(MERGE_CONFLICTS_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:
         logger.debug(f"  Conflict flag write skipped: {e}")
+
+
+# 2026-09-10: catching conflicts only after Confirm (above) means the match LINK is
+# already created on MyHeritage's side by the time we detect a mismatch -- Save gets
+# skipped, but the confirm itself can't be undone from here. Found live that the
+# compare page's own "Родственники" section, rendered BEFORE confirming, already
+# shows each relative slot side by side: the existing tree person (if any) in
+# `.individual`, and the source's proposed person in `.other_individual`. Checking
+# this lets us skip the whole match -- never click Confirm -- when it's a clear
+# mismatch, instead of confirming-then-discovering-then-not-saving.
+_COMPARE_RELATIVES = """
+() => [...document.querySelectorAll('.compare_item[data-automations="individual_row"]')].map(item => {
+    const mine = item.querySelector('.individual');
+    const theirs = item.querySelector('.other_individual');
+    const mineMissing = !!item.querySelector('.individual .missing_relative');
+    const mineName = mine ? (mine.querySelector('.individual_name')?.textContent?.trim() || null) : null;
+    const theirsName = theirs ? (theirs.querySelector('.individual_name')?.textContent?.trim() || null) : null;
+    return {mineMissing, mineName, theirsName};
+})
+"""
+
+
+def _pre_confirm_conflicts(relatives: list[dict]) -> list[tuple[str, str]]:
+    """Same conflict heuristic as _extract_merge_conflicts, applied to the compare
+    page's relatives list instead of the post-confirm wizard's raw text."""
+    conflicts = []
+    for r in relatives:
+        if r.get("mineMissing"):
+            continue  # no existing tree relative in this slot -- nothing to conflict with
+        mine, theirs = r.get("mineName"), r.get("theirsName")
+        if not mine or not theirs:
+            continue
+        if _names_conflict(theirs, mine):
+            conflicts.append((theirs, mine))
+    return conflicts
 
 # WAF bot-challenge served IN PLACE OF a page (HTTP 200, no Angular render).
 # Recon 2026-06-27: MyHeritage FraudProtection serves a Google reCAPTCHA Enterprise
@@ -429,6 +467,19 @@ async def process_one_match(
                 logger.error("  reCAPTCHA bot-challenge on compare page (captcha) — blocking session")
                 result["status"] = "blocked"
                 return result
+
+        # --- Step 1b: Pre-confirm conflict check (before Confirm is ever clicked) ---
+        relatives = await page.evaluate(_COMPARE_RELATIVES)
+        pre_conflicts = _pre_confirm_conflicts(relatives)
+        if pre_conflicts:
+            for src_name, tree_name in pre_conflicts:
+                logger.warning(
+                    f"  Pre-confirm conflict — source '{src_name}' vs tree '{tree_name}' "
+                    f"— skipping entirely, not confirming"
+                )
+            _append_conflict_flag(match_url, pre_conflicts, pre_confirm=True)
+            result["status"] = "conflict"
+            return result
 
         # --- Step 2: Click confirm button ---
         try:

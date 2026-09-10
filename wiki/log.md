@@ -4,6 +4,54 @@
 
 ---
 
+## [2026-09-10] feat | Check for conflicts BEFORE confirming, not just before saving
+
+**Object**: `browser/smart_matches.py` (`process_one_match`), `wiki/concepts/selectors.md`
+**Scenario**: regular (operator feedback on the 2026-09-08 fix's remaining gap)
+**Outcome**: ✅ shipped and live-verified — matches now skip entirely, pre-confirm
+
+**What happened**: Nikita pointed out the 2026-09-08 conflict-detection fix still
+had a real gap: it only checked for conflicts after the extract wizard loaded,
+which is AFTER clicking "Подтвердить совпадение" — so even though bad data no
+longer gets Saved into the tree, the match LINK itself was already confirmed on
+MyHeritage's side by the time we noticed a problem. Per his instruction, the
+check needed to happen before deciding to confirm at all, using whatever
+information is already available to judge "тот человек или не тот" up front.
+
+Live recon on the compare page (before clicking anything) found it already
+renders a full "Родственники" comparison section — one row per relative slot
+(`.compare_item[data-automations="individual_row"]`), each with the existing
+tree person's name (`.individual`, empty if no match exists yet) shown right
+next to the source's proposed person (`.other_individual`). This is the exact
+same signal a human manually reviewing the compare page would use to judge fit,
+available well before confirming. See
+[selectors](concepts/selectors.md#match-compare-page--pre-confirm-relatives-comparison-2026-09-10)
+for the full selector table.
+
+Added `_pre_confirm_conflicts()` (reuses the existing `_names_conflict()`
+heuristic from 2026-09-08) and wired it into `process_one_match()` right after
+the bot-challenge check and before the Confirm click — on a clear mismatch, the
+match is skipped entirely (`status="conflict"`, flagged to
+`merge_conflicts.jsonl` with `pre_confirm: true`) and Confirm is **never
+clicked**. Verified live against 15 real pending matches: correctly let through
+a same-person case with divergent name renderings (`יעקב יעקב אורנשטיין` variants
+matched, no conflict), and correctly flagged a genuine mismatch on another
+relative in the same match (different first-name spelling + no shared maiden
+name marker).
+
+The original 2026-09-08 post-confirm check (`_extract_merge_conflicts()`) stays
+in place unchanged as a second safety net — the wizard's "expand additional
+relatives" step can reveal people not shown on the initial compare page, so a
+conflict there still can't be caught before confirming with what's known so
+far. This is a real, acknowledged platform limitation, not an oversight: the
+compare page doesn't expose that deeper data before Confirm.
+
+**Code changes**: `browser/smart_matches.py`, `wiki/concepts/selectors.md`,
+`wiki/concepts/match-evaluation.md`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-09] incident | Stuck inter-session sleep again despite caffeinate — killed and restarted
 
 **Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process

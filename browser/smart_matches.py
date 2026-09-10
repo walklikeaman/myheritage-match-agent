@@ -248,15 +248,6 @@ def _names_conflict(source_name: str, suggested_name: str) -> bool:
     # record into it is enrichment, not a conflict.
     if _UNKNOWN_PLACEHOLDER_RE.match(sug):
         return False
-    # Cross-script (Hebrew vs non-Hebrew) comparison is unreliable without real
-    # transliteration -- MyHeritage often renders the same person in Hebrew on
-    # one side and Latin on the other, or combines both scripts into one
-    # string (including inside the maiden-name parens). Checked here, before
-    # either the paren or first-token comparison below, since both are
-    # unreliable across scripts. Don't flag these — err toward letting them
-    # through rather than blocking a legitimate match we can't judge.
-    if _has_hebrew(src) != _has_hebrew(sug):
-        return False
     src_paren = re.search(r"\(([^)]+)\)", src)
     sug_paren = re.search(r"\(([^)]+)\)", sug)
     if src_paren and sug_paren:
@@ -264,10 +255,25 @@ def _names_conflict(source_name: str, suggested_name: str) -> bool:
         # both sides have one (e.g. "(Стоцкая)" vs "(Зозуля)").
         src_p = _NAME_CONNECTOR_RE.sub("", src_paren.group(1)).strip()
         sug_p = _NAME_CONNECTOR_RE.sub("", sug_paren.group(1)).strip()
+        if _has_hebrew(src_p) != _has_hebrew(sug_p):
+            return False  # cross-script, unjudgeable -- see note below
         return src_p != sug_p
     src_stripped, sug_stripped = _strip_honorifics(src), _strip_honorifics(sug)
     src_first = src_stripped.split()[0] if src_stripped.split() else ""
     sug_first = sug_stripped.split()[0] if sug_stripped.split() else ""
+    # Cross-script (Hebrew vs non-Hebrew) comparison is unreliable without real
+    # transliteration -- MyHeritage often renders the same person's given name
+    # in Hebrew on one side and Latin on the other, sometimes inside a longer
+    # string that also contains the other script further along (found live
+    # 2026-09-10, e.g. source "Zipora Alving" vs tree "ציפורה אסתר Zipora Ester
+    # ... Levin" -- the tree's first TOKEN happens to be Hebrew even though a
+    # Latin match for "Zipora" appears right after it). Checked on the specific
+    # values being compared, not the whole name, so a Hebrave/Latin mismatch
+    # deeper in a composite string doesn't wrongly suppress a real conflict
+    # between two same-script names later in the string. Don't flag — err on letting through
+    # rather than blocking a match we can't judge across scripts.
+    if _has_hebrew(src_first) != _has_hebrew(sug_first):
+        return False
     return src_first != sug_first
 
 

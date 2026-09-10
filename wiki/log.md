@@ -102,6 +102,38 @@ rather than risking an unreliable phonetic-matching heuristic.
 
 ---
 
+## [2026-09-10] fix | Cross-script check needed to be per-token, not per-whole-name
+
+**Object**: `browser/smart_matches.py` (`_names_conflict`)
+**Scenario**: bugfix (same-day follow-up, found reviewing the first fix's live output)
+**Outcome**: ✅ fixed and shipped — 435/633 accumulated pairs (69%) now clear, up from 269/457 (59%)
+
+**What happened**: Minutes after shipping the previous fix, its own live output
+showed a new false positive: source `Zipora Alving (לבית Levin)` vs tree
+`ציפורה אסתר Zipora Ester לוין Levin` — same person, but flagged anyway. Root
+cause: the cross-script bypass checked `_has_hebrew()` on the **whole name
+string**, but a composite string like the tree's here contains Hebrew
+*somewhere* (its first token) even though a Latin match for the source's name
+appears later in the same string — so "does this string contain Hebrew
+anywhere" doesn't tell you whether the *specific value being compared* (the
+first token, or the paren content) is the mismatched part.
+
+Fixed by moving the `_has_hebrew()` check to apply to the specific values at
+the point of comparison — the two paren contents, or the two first tokens —
+instead of the two whole names up front. Verified against 13 cases (all prior
+fixes stay fixed, this new one is fixed, all real conflicts — Корниенко,
+Sverdlov, Манус, and a same-script Orenstein mismatch — still correctly flag).
+
+Re-ran against the full accumulated `data/merge_conflicts.jsonl`: 435/633 pairs
+(69%) now clear, versus 269/457 (59%) after the first pass — the pair *count*
+itself also grew because the runner kept flagging pre-confirm conflicts
+between the two fixes.
+
+**Code changes**: `browser/smart_matches.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-09] incident | Stuck inter-session sleep again despite caffeinate — killed and restarted
 
 **Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process

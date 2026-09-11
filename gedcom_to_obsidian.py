@@ -8,9 +8,8 @@ Usage: python3 gedcom_to_obsidian.py [path/to/file.ged]
 """
 import re
 import sys
-import json
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 GED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(
     "/Users/walklikeaman/Downloads/es268m_8996013ay311i66aec9fh8_A.ged")
@@ -115,7 +114,7 @@ VIP_RE = re.compile(
     r"[Гг]анн?у[щш][иi]н[еeё]р"
     r"|Gann?u[sc]h?ch?in[eo]r"
     r"|[Рр][аaоo]зс?с?[аa]ди[нн]?"
-    r"|R[oa]ss?adi[nн]", re.I)
+    r"|R[oa]ss?adi[nн]", re.IGNORECASE)
 
 include = set()
 include.add(ROOT_ID)

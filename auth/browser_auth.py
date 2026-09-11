@@ -9,21 +9,19 @@ Preference: always try storage_state first (it includes cookies + localStorage),
 fall back to raw cookie import if no state file exists yet.
 """
 
+import asyncio
 import json
 import random
-import asyncio
-from pathlib import Path
-from typing import Optional
 
-from playwright.async_api import async_playwright, BrowserContext, Page
 from loguru import logger
+from playwright.async_api import BrowserContext, Page, async_playwright
 
 from config import (
+    BASE_URL,
     COOKIES_FILE,
     SESSION_FILE,
-    VIEWPORT,
     USER_AGENT,
-    BASE_URL,
+    VIEWPORT,
 )
 
 # ---------------------------------------------------------------------------
@@ -211,7 +209,7 @@ async def _move_window_offscreen(page: Page) -> None:
             "bounds": _OFFSCREEN_BOUNDS,
         })
         await cdp.detach()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- best-effort UX nicety, must never raise
         logger.debug(f"Window off-screen move skipped: {e}")
 
 
@@ -229,7 +227,6 @@ def _normalize_cookies(raw: list[dict]) -> list[dict]:
     EditThisCookie uses 'expirationDate' (float); Playwright wants 'expires' (int).
     Also strips keys Playwright doesn't accept.
     """
-    playwright_keys = {"name", "value", "domain", "path", "expires", "httpOnly", "secure", "sameSite"}
     normalized = []
     for c in raw:
         cookie = {
@@ -274,7 +271,7 @@ async def _check_logged_in(page: Page) -> bool:
             return True
         logger.warning(f"Session check: unclear state at URL {url}")
         return False
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- any nav/DOM failure means "not logged in", not a crash
         logger.error(f"Session check failed: {e}")
         return False
 
@@ -310,7 +307,7 @@ async def create_browser_context(playwright, headless: bool = False) -> BrowserC
             )
             await context.add_init_script(_STEALTH_SCRIPT)
             logger.info("Session state loaded successfully")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- any failure here falls through to the next auth strategy
             logger.warning(f"Failed to load session state: {e}. Trying cookie import.")
             context = None
 
@@ -318,7 +315,7 @@ async def create_browser_context(playwright, headless: bool = False) -> BrowserC
     if context is None and COOKIES_FILE.exists():
         logger.info(f"Loading cookies from {COOKIES_FILE}")
         try:
-            with open(COOKIES_FILE, "r") as f:
+            with open(COOKIES_FILE) as f:  # noqa: ASYNC230 -- one-shot setup read, not a hot path
                 raw_cookies = json.load(f)
             cookies = _normalize_cookies(raw_cookies)
             context = await browser.new_context(
@@ -331,7 +328,7 @@ async def create_browser_context(playwright, headless: bool = False) -> BrowserC
             await context.add_init_script(_STEALTH_SCRIPT)
             await context.add_cookies(cookies)
             logger.info(f"Imported {len(cookies)} cookies")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- falls through to the unauthenticated fallback below
             logger.error(f"Cookie import failed: {e}")
             context = None
 
@@ -350,7 +347,7 @@ async def create_browser_context(playwright, headless: bool = False) -> BrowserC
     return context
 
 
-async def validate_and_save_session(context: BrowserContext, page: Optional[Page] = None) -> bool:
+async def validate_and_save_session(context: BrowserContext, page: Page | None = None) -> bool:
     """
     Check if we're logged into MyHeritage, and if so, save the current storage
     state to SESSION_FILE for future runs.
@@ -393,6 +390,7 @@ async def get_authenticated_context(headless: bool = False):
 # --- CLI usage for testing auth alone ---
 if __name__ == "__main__":
     import sys
+
     from rich.console import Console
 
     console = Console()
@@ -402,7 +400,7 @@ if __name__ == "__main__":
         console.print(f"Session file: {SESSION_FILE} (exists: {SESSION_FILE.exists()})")
         console.print(f"Cookies file: {COOKIES_FILE} (exists: {COOKIES_FILE.exists()})")
 
-        playwright, context, is_auth = await get_authenticated_context(headless=False)
+        playwright, _context, is_auth = await get_authenticated_context(headless=False)
         if is_auth:
             console.print("[green]✓ Authenticated successfully[/green]")
             console.print(f"[green]Session saved to {SESSION_FILE}[/green]")

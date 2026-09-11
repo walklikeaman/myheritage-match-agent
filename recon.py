@@ -12,20 +12,20 @@ Usage:
     python recon.py --page record    # Only Record Matches
 """
 
-import asyncio
 import argparse
+import asyncio
 import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-from playwright.async_api import async_playwright, Page
 from loguru import logger
+from playwright.async_api import Page, async_playwright
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
-from config import SMART_MATCHES_URL, RECORD_MATCHES_URL, DISCOVERIES_URL
 from auth.browser_auth import create_browser_context, validate_and_save_session
+from config import DISCOVERIES_URL, RECORD_MATCHES_URL, SMART_MATCHES_URL
 
 console = Console()
 RECON_DIR = Path("recon")
@@ -123,13 +123,13 @@ async def probe_selectors(page: Page, page_name: str) -> dict:
                 count = await page.locator(selector).count()
                 if count > 0:
                     found.append({"selector": selector, "count": count})
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 -- a candidate selector not matching is expected, not an error
+                logger.debug(f"  Candidate selector {selector!r} failed: {e}")
         results[element_name] = found
 
     # Save results
     output_file = RECON_DIR / f"{page_name}_selectors.json"
-    with open(output_file, "w") as f:
+    with open(output_file, "w") as f:  # noqa: ASYNC230 -- one-shot recon-output write, not a hot path
         json.dump(results, f, indent=2)
     logger.info(f"Selector probe saved to {output_file}")
 
@@ -141,10 +141,10 @@ async def extract_accessibility_tree(page: Page, page_name: str):
     try:
         snapshot = await page.accessibility.snapshot()
         output_file = RECON_DIR / f"{page_name}_accessibility.json"
-        with open(output_file, "w") as f:
+        with open(output_file, "w") as f:  # noqa: ASYNC230 -- one-shot recon-output write, not a hot path
             json.dump(snapshot, f, indent=2)
         logger.info(f"Accessibility tree saved to {output_file}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- recon best-effort, must not crash the probe run
         logger.warning(f"Could not extract accessibility tree: {e}")
 
 
@@ -173,12 +173,12 @@ async def extract_match_data_sample(page: Page, page_name: str):
                         "html_snippet": html[:1000],
                     })
                 break
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 -- a candidate selector not matching is expected, not an error
+            logger.debug(f"  Candidate selector {selector!r} failed: {e}")
 
     if sample_data:
         output_file = RECON_DIR / f"{page_name}_match_samples.json"
-        with open(output_file, "w") as f:
+        with open(output_file, "w") as f:  # noqa: ASYNC230 -- one-shot recon-output write, not a hot path
             json.dump(sample_data, f, indent=2, ensure_ascii=False)
         logger.info(f"Match samples saved to {output_file}")
     else:
@@ -209,7 +209,7 @@ async def recon_page(page: Page, url: str, page_name: str):
     # Full page HTML
     html = await page.content()
     html_file = RECON_DIR / f"{page_name}.html"
-    with open(html_file, "w", encoding="utf-8") as f:
+    with open(html_file, "w", encoding="utf-8") as f:  # noqa: ASYNC230 -- one-shot recon-output write, not a hot path
         f.write(html)
     console.print(f"[green]HTML saved:[/green] {html_file} ({len(html):,} bytes)")
 
@@ -253,7 +253,7 @@ async def recon_page(page: Page, url: str, page_name: str):
 
 
 async def run_recon(pages: list[str]):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 -- local time is intentional for a human-readable filename
     console.print(Panel(
         f"[bold]MyHeritage Reconnaissance[/bold]\n"
         f"Timestamp: {timestamp}\n"
@@ -304,14 +304,14 @@ async def run_recon(pages: list[str]):
                 try:
                     result = await recon_page(page, url, name)
                     results[page_key] = result
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 -- one page failing must not stop recon of the rest
                     logger.error(f"Recon failed for {page_key}: {e}")
                     results[page_key] = {"error": str(e)}
                 await asyncio.sleep(5)
 
         # Save full recon summary
         summary_file = RECON_DIR / f"summary_{timestamp}.json"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w") as f:  # noqa: ASYNC230 -- one-shot recon-output write, not a hot path
             json.dump(results, f, indent=2)
 
         console.print(Panel(

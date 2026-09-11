@@ -10,9 +10,8 @@ wiki/concepts/session-economics.md for why this exists (manual GEDCOM re-export 
 too heavy a lift to run per-session).
 """
 import json
-from pathlib import Path
 
-from config import GRAPH_UPDATES_FILE, DATA_DIR
+from config import DATA_DIR, GRAPH_UPDATES_FILE
 
 FAMILY_GRAPH_FILE = DATA_DIR / "family_graph.json"
 

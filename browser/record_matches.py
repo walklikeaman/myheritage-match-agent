@@ -15,11 +15,18 @@ wizard URL, same save flow; only difference is matchType=1 in the list URLs.
 
 import asyncio
 import random
+
 from loguru import logger
 from playwright.async_api import Page
 
-from config import BASE_URL, ACTION_DELAY_MIN, ACTION_DELAY_MAX, MATCH_DELAY_MIN, MATCH_DELAY_MAX, PERSON_DELAY_MIN, PERSON_DELAY_MAX
 from browser.smart_matches import process_one_match  # shared wizard logic
+from config import (
+    BASE_URL,
+    MATCH_DELAY_MAX,
+    MATCH_DELAY_MIN,
+    PERSON_DELAY_MAX,
+    PERSON_DELAY_MIN,
+)
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
 RECORD_MATCHES_URL = (

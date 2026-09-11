@@ -4,7 +4,6 @@ Usage: python3 progress.py
 """
 import re
 from pathlib import Path
-from datetime import datetime
 
 LOGS = sorted(Path("logs").glob("session_*.log"))
 

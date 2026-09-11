@@ -15,21 +15,19 @@ import random
 import re
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 from loguru import logger
-from playwright.async_api import Page, TimeoutError as PWTimeoutError
+from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PWTimeoutError
 
 from config import (
     BASE_URL,
-    ACTION_DELAY_MIN,
-    ACTION_DELAY_MAX,
-    MATCH_DELAY_MIN,
-    MATCH_DELAY_MAX,
-    PERSON_DELAY_MIN,
-    PERSON_DELAY_MAX,
     GRAPH_UPDATES_FILE,
+    MATCH_DELAY_MAX,
+    MATCH_DELAY_MIN,
     MERGE_CONFLICTS_FILE,
+    PERSON_DELAY_MAX,
+    PERSON_DELAY_MIN,
 )
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
@@ -148,7 +146,7 @@ _EXTRACT_ROWS_TEXT = """
 """
 
 
-async def _capture_graph_snapshot(page: Page, match_url: str) -> Optional[dict]:
+async def _capture_graph_snapshot(page: Page, match_url: str) -> dict | None:
     """
     Best-effort scrape of the wizard's navigator (name + relation-to-main per person)
     and the raw extract-row text, appended to GRAPH_UPDATES_FILE for later offline
@@ -166,7 +164,7 @@ async def _capture_graph_snapshot(page: Page, match_url: str) -> Optional[dict]:
             "navigator": navigator,
             "raw_text": raw_text[:20000],
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- best-effort capture, must never affect the real flow
         logger.debug(f"  Graph capture skipped: {e}")
         return None
 
@@ -176,7 +174,7 @@ def _append_graph_update(record: dict) -> None:
     try:
         with open(GRAPH_UPDATES_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- append-only write, must never raise
         logger.debug(f"  Graph update write skipped: {e}")
 
 
@@ -301,7 +299,7 @@ def _append_conflict_flag(
         }
         with open(MERGE_CONFLICTS_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- append-only write, must never raise
         logger.debug(f"  Conflict flag write skipped: {e}")
 
 
@@ -469,7 +467,7 @@ async def process_one_match(
         logger.info(f"→ {lang_url.split('match-compare/')[-1][:60]}")
         await page.goto(lang_url, wait_until="domcontentloaded", timeout=30000)
         await _sleep(4, 6)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- one bad match must not crash the whole session
         logger.error(f"Navigation failed: {e}")
         result["status"] = "error"
         return result
@@ -534,7 +532,7 @@ async def process_one_match(
                 result["status"] = "skip"
                 return result
             logger.debug(f"  Confirm click: {res}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- one bad match must not crash the whole session
             logger.error(f"  Confirm click error: {e}")
             result["status"] = "error"
             return result
@@ -555,12 +553,11 @@ async def process_one_match(
                 await _sleep(3, 5)
                 on_wizard = "showExtractWizard" in page.url
 
-            if not on_wizard:
-                # Already confirmed via link-only flow?
-                if await page.evaluate(_IS_CONFIRMED):
-                    result["status"] = "ok"
-                    result["fields"] = 0
-                    return result
+            # Already confirmed via link-only flow?
+            if not on_wizard and await page.evaluate(_IS_CONFIRMED):
+                result["status"] = "ok"
+                result["fields"] = 0
+                return result
             logger.warning("  Could not reach wizard")
             result["status"] = "skip"
             return result
@@ -571,12 +568,11 @@ async def process_one_match(
     # read was firing before the control existed) AND catches the reCAPTCHA bot-challenge
     # the WAF serves in place of the wizard when the session is flagged.
     wizard_state = await _await_wizard_ready(page, timeout=10.0)
-    if wizard_state == "challenge":
-        if wait_for_captcha:
-            for attempt in (1, 2):
-                if await _wait_for_human_captcha_solve(page, attempt):
-                    wizard_state = await _await_wizard_ready(page, timeout=10.0)
-                    break
+    if wizard_state == "challenge" and wait_for_captcha:
+        for attempt in (1, 2):
+            if await _wait_for_human_captcha_solve(page, attempt):
+                wizard_state = await _await_wizard_ready(page, timeout=10.0)
+                break
     if wizard_state == "challenge":
         # The match was confirmed in Step 2, but the wizard is walled off by reCAPTCHA.
         # Continuing would confirm more matches without enriching them, so stop the

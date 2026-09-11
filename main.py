@@ -24,23 +24,27 @@ Auth (one-time setup):
   All future runs use the saved session (fully headless).
 """
 
+import argparse
 import asyncio
 import sys
-import argparse
 
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from config import LOGS_DIR, MAX_MATCHES_PER_SESSION, SESSION_FILE, COOKIES_FILE
-from auth.browser_auth import create_browser_context, validate_and_save_session, _move_window_offscreen
-from browser.smart_matches import (
-    run_smart_matches_session,
-    run_combined_session,
-    run_extract_confirmed_session,
+from auth.browser_auth import (
+    _move_window_offscreen,
+    create_browser_context,
+    validate_and_save_session,
 )
 from browser.record_matches import run_record_matches_session
+from browser.smart_matches import (
+    run_combined_session,
+    run_extract_confirmed_session,
+    run_smart_matches_session,
+)
 from browser.source_confirm import run_bulk_source_confirm_session
+from config import COOKIES_FILE, LOGS_DIR, MAX_MATCHES_PER_SESSION, SESSION_FILE
 
 console = Console()
 
@@ -65,7 +69,13 @@ _DISCOVERY_URL = (
 
 async def capture_session() -> None:
     from playwright.async_api import async_playwright
-    from auth.browser_auth import _STEALTH_SCRIPT, _EXTRA_HEADERS, _LAUNCH_ARGS, _randomized_viewport
+
+    from auth.browser_auth import (
+        _EXTRA_HEADERS,
+        _LAUNCH_ARGS,
+        _STEALTH_SCRIPT,
+        _randomized_viewport,
+    )
     from config import USER_AGENT
 
     console.print("[bold yellow]Session capture mode — FRESH start (no old cookies)[/bold yellow]")
@@ -97,7 +107,7 @@ async def capture_session() -> None:
         final_url = page.url
         if "discovery-hub" in final_url:
             await context.storage_state(path=str(SESSION_FILE))
-            console.print(f"[green]✓ Session saved — matches page confirmed[/green]")
+            console.print("[green]✓ Session saved — matches page confirmed[/green]")
         else:
             console.print(f"[yellow]⚠ Still on: {final_url}[/yellow]")
             console.print("Saving anyway — try running main.py to see if it works.")

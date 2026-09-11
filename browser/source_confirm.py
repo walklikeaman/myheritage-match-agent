@@ -24,8 +24,8 @@ import random
 from loguru import logger
 from playwright.async_api import Page
 
-from config import BASE_URL
 from browser.smart_matches import _IS_BOT_CHALLENGE
+from config import BASE_URL
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
 SOURCES_URL = f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-source?lang=RU"
@@ -98,7 +98,7 @@ async def confirm_all_for_source(page: Page, source: dict) -> dict:
     try:
         await page.goto(url, wait_until="networkidle", timeout=60000)
         await _sleep(6, 9)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- one bad source tree must not crash the session
         logger.error(f"  Navigation failed: {e}")
         return result
 
@@ -118,7 +118,7 @@ async def confirm_all_for_source(page: Page, source: dict) -> dict:
     # buttons do. A genuine pointer-event click is what actually opens/advances this UI.
     try:
         await page.get_by_text("Дополнительные действия", exact=False).first.click(timeout=15000)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- one bad source tree must not crash the session
         logger.warning(f"  'Дополнительные действия' not clickable — skipping ({e})")
         result["status"] = "skip"
         return result
@@ -126,7 +126,7 @@ async def confirm_all_for_source(page: Page, source: dict) -> dict:
 
     try:
         await page.get_by_text("Подтвердить все", exact=False).first.click(timeout=15000)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- one bad source tree must not crash the session
         logger.warning(f"  'Подтвердить все' menu item not clickable — skipping ({e})")
         result["status"] = "skip"
         return result
@@ -136,7 +136,7 @@ async def confirm_all_for_source(page: Page, source: dict) -> dict:
     # distinct from the dropdown item's "Подтвердить все N совпадения(-й)".
     try:
         await page.get_by_role("button", name="Подтвердить совпадения").click(timeout=15000)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- one bad source tree must not crash the session
         logger.warning(f"  Confirm-modal button not clickable — skipping ({e})")
         result["status"] = "skip"
         return result

@@ -4,11 +4,11 @@ Finds: all individuals, direct ancestors of @I1@ (Nikita),
 VIP surnames (Ганущинер, Рассадина/Разсадина variants), outputs summary.
 Usage: python3 gedcom_graph.py [path/to/file.ged]
 """
+import json
 import re
 import sys
-import json
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 GED = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/Users/walklikeaman/Downloads/es268m_8996013ay311i66aec9fh8_A.ged")
 ROOT_ID = "@I1@"  # Nikita Nakonechnyi
@@ -113,13 +113,13 @@ print(f"Direct ancestors found: {len(ancestors)}")
 VIP = {
     "Ганущинер": re.compile(
         r"[Гг]анн?у[щш][иi]н[еeё]р|Gann?u[sc]h?ch?in[eo]r|Hann?u[sc]h?ch?in[eo]r",
-        re.I),
+        re.IGNORECASE),
     "Рассадина": re.compile(
         r"[Рр][аaоo]зс?с?[аa]ди[нн]?[аоыий]?"   # Разсадина (старая орф.), Рассадина, Росадина
         r"|[Рр]озс?[аa]ди[нн]?[аоыий]?"           # Розсадина (укр.)
         r"|R[oa]ss?adi[nн][aoiy]?"                 # Rassadin(a), Rosadin(a)
         r"|Rozs?adi[nн][aoiy]?",                   # Rozsadina
-        re.I),
+        re.IGNORECASE),
 }
 
 vip_hits = defaultdict(list)

@@ -3,13 +3,12 @@ SQLite database for tracking processed matches and flagged items.
 Provides resume capability — on restart, already-processed match IDs are skipped.
 """
 
-import sqlite3
 import json
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+import sqlite3
+from datetime import datetime, timezone
 
 from loguru import logger
+
 from config import DB_FILE
 
 
@@ -71,11 +70,11 @@ def record_match(
     match_id: str,
     match_type: str,
     decision: str,
-    person_id: Optional[str] = None,
-    person_name: Optional[str] = None,
-    confidence: Optional[int] = None,
-    data_saved: Optional[list] = None,
-    notes: Optional[str] = None,
+    person_id: str | None = None,
+    person_name: str | None = None,
+    confidence: int | None = None,
+    data_saved: list | None = None,
+    notes: str | None = None,
 ):
     with get_connection() as conn:
         conn.execute(
@@ -92,7 +91,7 @@ def record_match(
                 confidence,
                 decision,
                 json.dumps(data_saved) if data_saved else None,
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 notes,
             ),
         )
@@ -105,7 +104,7 @@ def flag_match(match_id: str, reason: str, match_data: dict):
             INSERT OR REPLACE INTO flagged_matches (id, reason, match_data, flagged_at)
             VALUES (?, ?, ?, ?)
             """,
-            (match_id, reason, json.dumps(match_data), datetime.utcnow().isoformat()),
+            (match_id, reason, json.dumps(match_data), datetime.now(timezone.utc).isoformat()),
         )
 
 
@@ -113,7 +112,7 @@ def start_run(match_type: str, dry_run: bool) -> int:
     with get_connection() as conn:
         cursor = conn.execute(
             "INSERT INTO run_log (started_at, match_type, dry_run) VALUES (?, ?, ?)",
-            (datetime.utcnow().isoformat(), match_type, int(dry_run)),
+            (datetime.now(timezone.utc).isoformat(), match_type, int(dry_run)),
         )
         return cursor.lastrowid
 
@@ -132,7 +131,7 @@ def finish_run(run_id: int, stats: dict):
             WHERE id = ?
             """,
             (
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 stats.get("seen", 0),
                 stats.get("accepted", 0),
                 stats.get("skipped", 0),

@@ -15,6 +15,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ruff
-        run: pip install ruff
+        # Pinned 2026-09-11: unpinned `pip install ruff` silently picked up a
+        # newer release (0.15.12 -> 0.16.7) with a wider default rule set,
+        # which failed CI with 69 new findings overnight with no code change.
+        # Bump this deliberately when ready to adopt a new ruff version's
+        # defaults, not by surprise.
+        run: pip install ruff==0.16.7
       - name: Run ruff
         run: ruff check . --exclude=venv

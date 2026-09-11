@@ -4,6 +4,47 @@
 
 ---
 
+## [2026-09-11] incident | ~14h outage — Mac reboot wiped runner AND the ScheduleWakeup monitoring chain broke
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`, the hourly monitoring loop itself
+**Scenario**: incident (compound failure — both the runner and its own watchdog died)
+**Outcome**: ✅ recovered — runner recreated and relaunched, gap documented
+
+**What happened**: Operator asked "why isn't it continuing automatically" at
+13:47. Found `screen -ls` empty and `/tmp/mh_runner_smart_v1.sh` missing — Mac
+rebooted, same failure mode as prior incidents. The last completed session
+before the gap (`session_smart_20260910_223542.log`, 22:35-23:23) finished
+cleanly, so nothing was lost there — but no new session ran for roughly
+**14 hours** after that, meaning the standing hourly monitoring check-in
+(driven by `ScheduleWakeup`, which is supposed to detect exactly this —
+`screen -ls` empty — and self-heal within an hour) did not fire at all during
+that window. The session context was re-read at the start of this
+conversation (per the system reminder), consistent with the Claude Code
+app/session itself having been restarted or resumed — `ScheduleWakeup` timers
+do not survive that, so the monitoring chain silently died along with the
+runner, and nothing caught it until the operator noticed and asked directly.
+
+Recreated `/tmp/mh_runner_smart_v1.sh` from the canonical content in the
+2026-09-08 "fix | Stop auto-confirming conflicting merge suggestions" log
+entry and relaunched via `SCREENDIR=/tmp/screendir-mh screen -dmS
+myheritage-smart bash /tmp/mh_runner_smart_v1.sh`. Confirmed alive.
+
+**Known limitation, not fixed here**: `ScheduleWakeup`-based monitoring is
+inherently fragile across app/session restarts — there is no mechanism in
+this setup that detects "the monitoring loop itself stopped" from outside the
+loop. A `launchd` LaunchAgent (mentioned as a future improvement back on
+2026-08-19/08-28 for the old runner, never built) would survive both the
+runner-process death AND a Claude Code session restart, since it's OS-level,
+not tied to this conversation. Still out of scope unless the operator asks
+for it specifically — noting the recurrence here since this is now the second
+time a restart-survival gap has caused a multi-hour-plus outage (the first
+being the 2026-08-19→08-28 8-day gap on the old confirm-by-source runner).
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-10] incident | Stuck inter-session sleep recurred a third time — killed and restarted
 
 **Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process

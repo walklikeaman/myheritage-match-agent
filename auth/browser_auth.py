@@ -350,15 +350,24 @@ async def create_browser_context(playwright, headless: bool = False) -> BrowserC
     return context
 
 
-async def validate_and_save_session(context: BrowserContext) -> bool:
+async def validate_and_save_session(context: BrowserContext, page: Optional[Page] = None) -> bool:
     """
-    Open a page, check if we're logged into MyHeritage, and if so,
-    save the current storage state to SESSION_FILE for future runs.
+    Check if we're logged into MyHeritage, and if so, save the current storage
+    state to SESSION_FILE for future runs.
+
+    Pass an existing `page` to reuse it for the check (and for whatever the
+    caller does afterward) instead of opening a second one — 2026-09-11: each
+    context.new_page() is a separate top-level OS window in Chromium, and the
+    operator asked for one window per session instead of two. When `page` is
+    omitted, a throwaway page is opened and closed here as before (unchanged
+    behavior for other callers, e.g. auth/browser_auth.py's own CLI test).
 
     Returns True if authenticated.
     """
-    page = await context.new_page()
-    await _move_window_offscreen(page)
+    owns_page = page is None
+    if page is None:
+        page = await context.new_page()
+        await _move_window_offscreen(page)
     try:
         is_logged_in = await _check_logged_in(page)
         if is_logged_in:
@@ -366,7 +375,8 @@ async def validate_and_save_session(context: BrowserContext) -> bool:
             logger.info(f"Session saved to {SESSION_FILE}")
         return is_logged_in
     finally:
-        await page.close()
+        if owns_page:
+            await page.close()
 
 
 async def get_authenticated_context(headless: bool = False):

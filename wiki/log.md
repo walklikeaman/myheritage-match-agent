@@ -4,6 +4,42 @@
 
 ---
 
+## [2026-09-11] feat | Down to one browser window per session, not two
+
+**Object**: `auth/browser_auth.py` (`validate_and_save_session`), `main.py`
+**Scenario**: regular (operator follow-up: also asked whether headless
+fingerprint-spoofing could avoid the window entirely)
+**Outcome**: ✅ shipped and live-verified — one page/window per session
+
+**What happened**: Explained to the operator that going headless isn't a
+"haven't tried" gap — this project already injects `_STEALTH_SCRIPT`
+(spoofs `navigator.webdriver`, plugins, etc.) and headless has still been
+tested repeatedly since 2026-07-21 and instant-blocked every time; MyHeritage's
+WAF (Incapsula/reCAPTCHA Enterprise) fingerprints far deeper than JS-level
+properties (canvas/WebGL rendering, timing, the CDP protocol itself), which
+cosmetic property spoofing doesn't touch.
+
+Instead, eliminated the *second* window: `validate_and_save_session()` used to
+always open (and close) its own throwaway page for the login check, separate
+from the page `run()` in `main.py` opened afterward for the actual work — two
+separate top-level OS windows per session even after the earlier off-screen
+fix. Added an optional `page` parameter to `validate_and_save_session()`: when
+provided, it reuses that page for the login check (and doesn't close it
+after) instead of opening its own; when omitted, unchanged behavior (still
+opens/closes its own, for other callers like the module's CLI test block).
+`main.py` now creates one page, moves it off-screen, and passes it into
+`validate_and_save_session()` — the same page then carries on to the actual
+match-processing work.
+
+Verified live: `len(context.pages)` stays at 1 throughout a full
+login-check-then-navigate cycle, authentication succeeds, and real content
+still loads (60 people found, matching normal scale).
+
+**Code changes**: `auth/browser_auth.py`, `main.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-11] feat | Move the required visible browser windows off-screen
 
 **Object**: `auth/browser_auth.py` (`_move_window_offscreen`), `main.py`

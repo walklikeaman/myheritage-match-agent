@@ -119,19 +119,23 @@ async def run(
 
     async with async_playwright() as pw:
         context = await create_browser_context(pw, headless=headless)
-        is_auth = await validate_and_save_session(context)
+        # One page for the whole session (login check + the actual work) --
+        # 2026-09-11: used to be two separate context.new_page() calls, each a
+        # separate top-level OS window, popping up twice per session. See
+        # auth/browser_auth.py 2026-09-11 for the off-screen positioning that
+        # also keeps this one window out of the operator's way without
+        # breaking the WAF-passing fingerprint. Never applied to
+        # capture_session()'s window above -- that one needs to be visible
+        # for manual login.
+        page = await context.new_page()
+        await _move_window_offscreen(page)
+        is_auth = await validate_and_save_session(context, page=page)
         if not is_auth:
             console.print("[red]Auth failed.[/red] Run: python main.py --capture-session")
             await context.close()
             sys.exit(1)
 
         console.print("[green]✓ Authenticated[/green]")
-        page = await context.new_page()
-        # See auth/browser_auth.py 2026-09-11 -- keeps the required visible
-        # (non-headless) window out of the operator's way without breaking
-        # the WAF-passing fingerprint. Never applied to capture_session()'s
-        # window above -- that one needs to be visible for manual login.
-        await _move_window_offscreen(page)
 
         if mode == "combined":
             summary = await run_combined_session(page, max_matches=max_matches, scroll_rounds=scroll_rounds)

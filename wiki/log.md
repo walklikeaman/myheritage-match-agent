@@ -4,6 +4,48 @@
 
 ---
 
+## [2026-09-11] feat | Move the required visible browser windows off-screen
+
+**Object**: `auth/browser_auth.py` (`_move_window_offscreen`), `main.py`
+**Scenario**: regular (operator complained the browser was popping up and stealing focus during work — twice per session)
+**Outcome**: ✅ shipped and live-verified — windows off-screen, real data still loads correctly
+
+**What happened**: Nikita reported the visible Chromium window kept popping up
+and interrupting his work, and that it seemed to open **twice** per session —
+confirmed this is real: `validate_and_save_session()` opens its own throwaway
+page for the login check (closed right after), then `run()` in `main.py` opens
+a second page for the actual work — each `context.new_page()` call is a
+separate top-level OS window in Chromium, so that's genuinely two window
+pop-ups every session, not a bug/retry artifact.
+
+Cannot go headless — MyHeritage's WAF instant-blocks `--smart-only` in true
+headless mode (documented repeatedly since 2026-07-21, see
+[rate-limiting](concepts/rate-limiting.md)), confirmed again live today that
+this constraint is unchanged. Instead, moved the required visible window
+off-screen: tried the `--window-position` Chromium launch flag first — doesn't
+work reliably on macOS (tested live, window came back at the default
+on-screen position). Tried minimizing via CDP's `Browser.setWindowBounds`
+`windowState: "minimized"` — the state command took effect, but minimizing
+broke real rendering (an infinite-scroll people list came back with 0 results
+while minimized, vs. the expected 60-120). Settled on CDP window *positioning*
+(not minimizing): `Browser.setWindowBounds` with `left: -1400`. macOS clamps
+`top` to the menu-bar height (~33px) no matter what's requested, but `left`
+moves freely — verified live that this keeps the window genuinely
+screen-rendered (same fingerprint, WAF still passes) while only leaving a
+~40px sliver on the screen's left edge, and that real content still loads
+correctly (60-120 people found in repeated live tests, matching normal scale).
+
+Wired `_move_window_offscreen()` into both real-session page-creation points —
+`validate_and_save_session()`'s login-check page, and `run()`'s main working
+page in `main.py`. **Deliberately not applied** to `capture_session()`'s
+window (the one-time manual-login flow) — that one needs to stay visible so
+the operator can actually log in.
+
+**Code changes**: `auth/browser_auth.py`, `main.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-11] incident | `notify_vip.py` self-referential feedback loop — session logs hit 2.1GB, "6315707 hit(s)"
 
 **Object**: `notify_vip.py`, `logs/session_smart_*.log`

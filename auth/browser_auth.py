@@ -179,6 +179,41 @@ _LAUNCH_ARGS = [
     "--window-size=1440,900",
 ]
 
+# 2026-09-11: per operator, the visible (non-headless) browser windows this flow
+# requires (MyHeritage's WAF instant-blocks --smart-only in true headless — see
+# wiki/concepts/rate-limiting.md, don't remove headless=False) were popping up
+# and stealing focus/attention during the day -- and doing so TWICE per session,
+# since validate_and_save_session() opens its own throwaway page for the login
+# check (closed right after) before main.py opens the real working page --
+# each context.new_page() call is a separate top-level OS window in Chromium.
+# The `--window-position` CLI launch arg does NOT work reliably on macOS (tried
+# live 2026-09-11 -- window came back at the default on-screen position), but
+# CDP's Browser.setWindowBounds does. Moving the window off-screen (not
+# minimizing -- minimizing was found live to break rendering, e.g. an
+# infinite-scroll list came back with 0 people while minimized) keeps it a
+# genuine on-screen-rendered window (same fingerprint the WAF check needs) that
+# just isn't visually in the operator's way. macOS clamps `top` to the menu-bar
+# height (~33px) regardless of what's requested, so only `left` reliably moves;
+# pushing it fully past the window's own width is enough to get it off most of
+# the screen.
+_OFFSCREEN_BOUNDS = {"left": -1400, "top": 33}
+
+
+async def _move_window_offscreen(page: Page) -> None:
+    """Best-effort -- must never raise, since this is a UX nicety, not a
+    functional requirement, and CDP window commands are meaningless (and
+    sometimes unsupported) in real headless mode."""
+    try:
+        cdp = await page.context.new_cdp_session(page)
+        window_info = await cdp.send("Browser.getWindowForTarget")
+        await cdp.send("Browser.setWindowBounds", {
+            "windowId": window_info["windowId"],
+            "bounds": _OFFSCREEN_BOUNDS,
+        })
+        await cdp.detach()
+    except Exception as e:
+        logger.debug(f"Window off-screen move skipped: {e}")
+
 
 def _randomized_viewport():
     """Return a viewport with slight pixel jitter so every run looks different."""
@@ -323,6 +358,7 @@ async def validate_and_save_session(context: BrowserContext) -> bool:
     Returns True if authenticated.
     """
     page = await context.new_page()
+    await _move_window_offscreen(page)
     try:
         is_logged_in = await _check_logged_in(page)
         if is_logged_in:

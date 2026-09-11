@@ -33,7 +33,7 @@ from rich.console import Console
 from rich.table import Table
 
 from config import LOGS_DIR, MAX_MATCHES_PER_SESSION, SESSION_FILE, COOKIES_FILE
-from auth.browser_auth import create_browser_context, validate_and_save_session
+from auth.browser_auth import create_browser_context, validate_and_save_session, _move_window_offscreen
 from browser.smart_matches import (
     run_smart_matches_session,
     run_combined_session,
@@ -127,6 +127,11 @@ async def run(
 
         console.print("[green]✓ Authenticated[/green]")
         page = await context.new_page()
+        # See auth/browser_auth.py 2026-09-11 -- keeps the required visible
+        # (non-headless) window out of the operator's way without breaking
+        # the WAF-passing fingerprint. Never applied to capture_session()'s
+        # window above -- that one needs to be visible for manual login.
+        await _move_window_offscreen(page)
 
         if mode == "combined":
             summary = await run_combined_session(page, max_matches=max_matches, scroll_rounds=scroll_rounds)

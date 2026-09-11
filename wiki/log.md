@@ -4,6 +4,51 @@
 
 ---
 
+## [2026-09-11] incident | `notify_vip.py` self-referential feedback loop — session logs hit 2.1GB, "6315707 hit(s)"
+
+**Object**: `notify_vip.py`, `logs/session_smart_*.log`
+**Scenario**: incident (found while investigating a bogus VIP count during routine monitoring)
+**Outcome**: ✅ fixed and shipped — root cause removed, 12GB of bloated logs cleaned up
+
+**What happened**: A post-restart session logged `🔴 VIP ANCESTOR ALERT —
+6315707 hit(s) found` — obviously bogus (real counts have been in the
+dozens/low-hundreds). Investigation found `notify_vip.py`'s `SCAN_FILES`
+included `logs/session_*.log` (glob over the **entire project history** — 1066
+files, 12GB) in addition to `data/graph_updates.jsonl`, re-scanned on every
+single call. Since the runner does `python3 notify_vip.py >> "$LOG"`
+immediately after every session, each run's own printed hit list (lines like
+`    session_smart_X.log:1234  <surname-containing text>`) got appended into
+that session's log — and the **next** run's scan of `session_*.log` picked up
+those detail lines as new "hits" (the `SELF_OUTPUT_MARKER` guard only excluded
+the summary header, never the per-hit detail lines), printed an even bigger
+listing into its own log, which the run after that scanned in turn. This is a
+classic self-reinforcing feedback loop: hit counts and session-log sizes both
+grew exponentially — traced the size curve across ~48h: 12MB → 18MB → 25MB →
+... → 2.1GB, roughly 1.2-1.3x per session, consistent with compounding.
+
+The absurd count and multi-gigabyte logs are very likely why the last
+pre-restart session (`session_smart_20260911_142508.log`) also reported
+"Found 0 people" — plausible resource/time exhaustion from the runaway
+`notify_vip.py` call eating CPU/memory rather than a real site-side anomaly,
+though not conclusively proven.
+
+**Fix**: dropped `logs/session_*.log` from `SCAN_FILES` entirely — every real
+VIP hit is already captured in `graph_updates.jsonl` (the actual
+match/relative data), which `notify_vip.py` never writes to, so it structurally
+cannot feed on its own output there. Verified: re-run now takes ~6s (was
+timing out / hanging) and reports 81 hits (76 Ганущинер + 5 Рассадина) — matches
+the last known-good count from before the snowball started.
+
+**Cleanup**: deleted 25 session logs over 5MB (12GB total) whose size was
+purely this bug's byproduct — none contained unique data beyond what's already
+in `graph_updates.jsonl`. `logs/` is back to 32MB. Restarted the runner to
+pick up the fix.
+
+**Code changes**: `notify_vip.py`.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-11] incident | ~14h outage — Mac reboot wiped runner AND the ScheduleWakeup monitoring chain broke
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`, the hourly monitoring loop itself

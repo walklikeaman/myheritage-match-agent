@@ -1,7 +1,8 @@
 """
-Scan session logs AND the live-captured graph_updates.jsonl for VIP ancestor
-surnames and print findings. Run after every session. Exit code 1 if VIP hits
-found (for shell alerting).
+Scan the live-captured graph_updates.jsonl for VIP ancestor surnames and print
+findings. Run after every session. Exit code 1 if VIP hits found (for shell
+alerting). Does NOT scan logs/session_*.log — see the 2026-09-11 incident note
+below the SCAN_FILES definition for why.
 
 VIP lineages:
   1. Ганущинер (one Н) — direct ancestor line, all spelling variants
@@ -33,17 +34,25 @@ VIP_GROUPS = {
     ],
 }
 
-LOGS = sorted(Path("logs").glob("session_*.log"))
 GRAPH_UPDATES = Path("data/graph_updates.jsonl")
-SCAN_FILES = LOGS + ([GRAPH_UPDATES] if GRAPH_UPDATES.exists() else [])
+SCAN_FILES = [GRAPH_UPDATES] if GRAPH_UPDATES.exists() else []
 
-# The runner appends this script's own stdout into the same session logs it scans
-# next time round. Its own status lines spell out the tracked surnames verbatim
-# ("No VIP ancestor hits (Ганущинер/... / Рассадина/...)"), so without this guard the
-# script would match its own prior "no hits" message forever, every single run.
-# "VIP ancestor hit" is a stable marker distinct from any real extracted genealogy
-# text — filter it out before regex-matching, regardless of message wording changes.
-SELF_OUTPUT_MARKER = "vip ancestor hit"
+# 2026-09-11 incident: this used to also scan logs/session_*.log. The runner
+# appends this script's own stdout into the session log right after it runs
+# (`python3 notify_vip.py >> "$LOG"`), and each hit line it prints
+# ("    session_smart_X.log:1234  <surname-containing text>") itself contains
+# the surname — so the NEXT run, which scans that now-larger log again, found
+# its own prior hit listing as "new" hits and re-printed an even bigger
+# listing into that session's log, which the run after that scanned in turn.
+# This is a self-reinforcing feedback loop: hit counts and session log sizes
+# both grew explosively (one session log hit 2.1GB; a `notify_vip.py` run
+# reported "6315707 hit(s) found" and effectively hung). The
+# SELF_OUTPUT_MARKER guard below only ever caught the summary header line
+# ("VIP ANCESTOR ALERT"), not the per-hit detail lines that actually caused
+# the snowball. Fixed by dropping session-log scanning entirely — every real
+# hit is already captured in graph_updates.jsonl (that's where the actual
+# match/relative data lives), which this script never writes to, so it can't
+# feed on its own output.
 
 all_hits = {}  # group -> list of (fname, lineno, line)
 for group, patterns in VIP_GROUPS.items():
@@ -52,8 +61,6 @@ for group, patterns in VIP_GROUPS.items():
     for src in SCAN_FILES:
         text = src.read_text(errors="ignore")
         for lineno, line in enumerate(text.splitlines(), 1):
-            if SELF_OUTPUT_MARKER in line.lower():
-                continue
             if combined.search(line):
                 hits.append((src.name, lineno, line.strip()[:200]))
     if hits:
@@ -70,5 +77,5 @@ if all_hits:
     sys.exit(1)
 else:
     print("✓ No VIP ancestor hits (Ганущинер/Ганнущинер / Рассадина/Россадина/Росадина/Розсадина) "
-          "in session logs or graph_updates.jsonl.")
+          "in graph_updates.jsonl.")
     sys.exit(0)

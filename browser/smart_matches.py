@@ -10,6 +10,7 @@ Flow per match:
 """
 
 import asyncio
+import difflib
 import json
 import random
 import re
@@ -205,18 +206,33 @@ _UNKNOWN_PLACEHOLDER_RE = re.compile(
 
 _HEBREW_RE = re.compile(r"[֐-׿]")
 
-# "לבית"/"בלבית" (Hebrew "née"/"of the house of") and "born"/"nee"/"née" wrap a
-# maiden name inside the parens without being part of the name itself -- found
-# live 2026-09-10: source paren "(לבית Reifman)" vs tree paren "(Reifman)" is
-# the SAME surname, not a conflict, once this connector is stripped.
-_NAME_CONNECTOR_RE = re.compile(r"\b(לבית|בלבית|born|n[eé]e)\b", re.IGNORECASE)
+# "לבית"/"בלבית" (Hebrew "née"/"of the house of"), "born"/"nee"/"née" (English/
+# French) and "nacida" (Spanish, found live 2026-09-12 on "Malka Ayzen (nacida
+# Levin)" vs tree "Malka (Levin)" -- same surname, false-flagged because the
+# Spanish marker wasn't stripped) wrap a maiden name inside the parens without
+# being part of the name itself.
+_NAME_CONNECTOR_RE = re.compile(r"\b(לבית|בלבית|born|n[eé]e|nacida)\b", re.IGNORECASE)
 
-# Hebrew honorific/relational titles that can prefix a name ("רבי" = Rabbi,
-# 'הרה"ח' = an abbreviated rabbinic/chassidic title, "מרת"/"גברת" = Mrs./Lady,
-# "מר" = Mr.) -- found live 2026-09-10 causing false-positive conflicts where
-# the title, not the actual name, was compared as the "first token" (e.g. source
-# 'Chaim Radzyner' vs tree 'הרה"ח חיים רדזינר Radziner' is the same person).
-_HONORIFIC_PREFIX_RE = re.compile(r'^(הרה"ח|הרב|רבי|רב|מרת|גברת|מר)\s+')
+# Honorific/relational titles that can prefix a name -- "רבי"/"rabbi"/"rav"/
+# "reb"/"ר'" = Rabbi/Mr. variants, 'הרה"ח' = an abbreviated rabbinic/chassidic
+# title, "הגאון" = "the Gaon" (a scholarly honorific, found live 2026-09-12
+# stacked after "הרב" in "הרב הגאון משה יהודה לייב אורנשטיין"), "מרת"/"גברת" =
+# Mrs./Lady, "מר"/"мр" = Mr. -- found live 2026-09-10/12 causing false-positive
+# conflicts where the title, not the actual name, was compared as the "first
+# token" (e.g. source 'Chaim Radzyner' vs tree 'הרה"ח חיים רדזינר Radziner' is
+# the same person).
+_HONORIFIC_PREFIX_RE = re.compile(
+    r'^(הרה"ח|הרב|הגאון|רבי|רב|מרת|גברת|מר|rabbi|rav|reb|ר[\'׳])\s+', re.IGNORECASE
+)
+
+# A tree-generated numbered/lettered list prefix on a name, e.g. "97-Rose /
+# Raisel Lubanov" or "6. Екатерина Ивановна" or "1-жена N N" -- not part of the
+# name, would otherwise pollute the first token compared.
+_NUMERIC_PREFIX_RE = re.compile(r"^\d+[-.)]\s*")
+
+# Outermost parenthetical aside, e.g. "(née Lubanow (לובנוב))" -- greedy so
+# nested parens are captured as one aside rather than only the innermost pair.
+_PAREN_RE = re.compile(r"\((.*)\)")
 
 
 def _normalize_name(name: str) -> str:
@@ -235,10 +251,151 @@ def _has_hebrew(s: str) -> bool:
     return bool(_HEBREW_RE.search(s))
 
 
+def _variant_match(a: str, b: str) -> bool:
+    """True if two same-script name tokens are plausibly the same name --
+    exact match, a nickname/truncation (one is a substring of the other, e.g.
+    'sam' in 'samuel'), or a spelling/transliteration variant (high string
+    similarity, e.g. 'eliashiv'/'elyashiv', 'raifman'/'reifman'). Length gates
+    avoid single-letter initials or short tokens matching almost anything."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
+        return True
+    return len(a) >= 4 and len(b) >= 4 and difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def _expand_token(token: str) -> set[str]:
+    """A token may list alternatives with '/' (e.g. 'Yosef/Yoseph') or be a
+    hyphenated compound (e.g. 'משה-יהודה-לייב') -- expand to every individual
+    name it could mean. Hyphen parts are added alongside the joined form
+    (some hyphenated names are genuinely a single compound name); slash parts
+    replace the joined form (no one is actually named 'Yosef/Yoseph')."""
+    variants: set[str] = set()
+    for part in token.split("/"):
+        part = part.strip()
+        if not part or not any(ch.isalpha() for ch in part):
+            continue  # drop pure punctuation/digit noise (e.g. a lone "-" separator)
+        variants.add(part)
+        if "-" in part:
+            variants.update(
+                p.strip() for p in part.split("-")
+                if p.strip() and any(ch.isalpha() for ch in p)
+            )
+    return variants
+
+
+def _trailing_surname_run(tokens: list[str]) -> list[str]:
+    """MyHeritage often lists several alternate spellings of the SAME surname
+    back to back at the end of a name (e.g. '...Orenstein אורנשטיין Urstein'
+    -- Latin, Hebrew, and a third Latin respelling of one surname). Taking
+    only the literal last word as "the surname" then misses the other two
+    entirely. Walk backward from the last token, extending the run through
+    each token that is either cross-script from (unjudgeable against) or a
+    spelling variant of the one immediately before it in the run. Found live
+    2026-09-12: a single cross-script hop is not enough signal on its own --
+    'Joseph Haim אורנשטיין' would otherwise wrongly sweep the given name
+    'Haim' into the surname run just because it sits next to the Hebrew
+    surname -- so only trust a run of 3+ (i.e. at least 2 confirmed hops);
+    a shorter run falls back to the plain last-token guess. The first token
+    is never consumed, so there's always at least one given-name token left."""
+    if not tokens:
+        return []
+    run = [tokens[-1]]
+    i = len(tokens) - 2
+    while i >= 1:
+        cand = tokens[i]
+        cand_exp = _expand_token(cand)
+        prev_exp = _expand_token(run[-1])
+        if not cand_exp or not prev_exp:
+            break
+        extends = any(
+            _has_hebrew(a) != _has_hebrew(b) or _variant_match(a, b)
+            for a in cand_exp for b in prev_exp
+        )
+        if not extends:
+            break
+        run.append(cand)
+        i -= 1
+    return run if len(run) >= 3 else [tokens[-1]]
+
+
+def _name_pools(name: str) -> tuple[set[str], set[str]]:
+    """Split an already-normalized name into (given_name_pool, surname_pool)
+    -- sets of acceptable token spellings, not a single positional value, so
+    slash/hyphen alternatives and parenthetical aliases all count. A
+    parenthetical marked with a née/born/לבית/nacida connector is a surname
+    alias (maiden/birth name); a bare parenthetical could be either an
+    alternate given name (e.g. '(Jacob)') or a shortened surname (e.g.
+    '(ORENSTEIN)' for 'Oren'), so it's added to both pools."""
+    name = _NUMERIC_PREFIX_RE.sub("", _strip_honorifics(name))
+    aside_pool: set[str] = set()
+    aside_is_surname_only = False
+    paren = _PAREN_RE.search(name)
+    if paren:
+        name = name[: paren.start()] + name[paren.end():]
+        aside_raw = paren.group(1).replace("(", " ").replace(")", " ")
+        if _NAME_CONNECTOR_RE.search(aside_raw):
+            aside_raw = _NAME_CONNECTOR_RE.sub(" ", aside_raw)
+            aside_is_surname_only = True
+        for tok in aside_raw.split():
+            aside_pool.update(_expand_token(tok))
+
+    tokens = name.split()
+    if not tokens:
+        return (set(), aside_pool)
+
+    surname_run = _trailing_surname_run(tokens)
+    surname_seed: set[str] = set()
+    for tok in surname_run:
+        surname_seed.update(_expand_token(tok))
+    given_pool: set[str] = set()
+    for tok in tokens[: len(tokens) - len(surname_run)]:
+        given_pool.update(_expand_token(tok))
+
+    # A bare (non-connector) parenthetical could be an alternate given name
+    # (e.g. "(Jacob)" glossing "Yaakov") or a shortened/expanded surname (e.g.
+    # "(ORENSTEIN)" for "Oren") -- found live 2026-09-12 that guessing "both
+    # pools" backfires: an unrelated given-name gloss landing in the surname
+    # pool can out-vote a legitimate cross-script surname bypass. Route it by
+    # whether it actually resembles the surname; only fall back to "both"
+    # when there's no signal either way.
+    aside_matches_surname = aside_pool and any(
+        _variant_match(a, b) for a in aside_pool for b in surname_seed if _has_hebrew(a) == _has_hebrew(b)
+    )
+    if aside_is_surname_only or aside_matches_surname:
+        surname_pool = surname_seed | aside_pool
+    else:
+        surname_pool = surname_seed
+        given_pool |= aside_pool
+    return (given_pool, surname_pool)
+
+
+def _pool_match(pool_a: set[str], pool_b: set[str]) -> bool:
+    """True if the two token pools are consistent -- either side empty means
+    nothing to compare (permissive: can't judge). Cross-script pairs (Hebrew
+    vs non-Hebrew) can't be judged without real transliteration and are
+    skipped; if literally every pair crosses scripts, there's nothing
+    comparable at all, so don't block on it. Otherwise at least one
+    same-script pair must be a plausible variant match."""
+    if not pool_a or not pool_b:
+        return True
+    comparable = [(a, b) for a in pool_a for b in pool_b if _has_hebrew(a) == _has_hebrew(b)]
+    if not comparable:
+        return True
+    return any(_variant_match(a, b) for a, b in comparable)
+
+
 def _names_conflict(source_name: str, suggested_name: str) -> bool:
     """Best-effort, deliberately biased toward over-flagging: a false positive
     just costs the operator a couple minutes of manual review on the site; a
-    false negative silently writes a stranger's family into the tree."""
+    false negative silently writes a stranger's family into the tree.
+
+    Requires BOTH a given-name pool match AND a surname pool match to clear a
+    pair as non-conflicting -- a shared surname alone (very common within one
+    extended family cluster) is never enough on its own, which is what keeps
+    genuinely different relatives sharing a surname correctly flagged."""
     src, sug = _normalize_name(source_name), _normalize_name(suggested_name)
     if src == sug:
         return False
@@ -246,33 +403,9 @@ def _names_conflict(source_name: str, suggested_name: str) -> bool:
     # record into it is enrichment, not a conflict.
     if _UNKNOWN_PLACEHOLDER_RE.match(sug):
         return False
-    src_paren = re.search(r"\(([^)]+)\)", src)
-    sug_paren = re.search(r"\(([^)]+)\)", sug)
-    if src_paren and sug_paren:
-        # Maiden/married name in parentheses is the most reliable signal when
-        # both sides have one (e.g. "(Стоцкая)" vs "(Зозуля)").
-        src_p = _NAME_CONNECTOR_RE.sub("", src_paren.group(1)).strip()
-        sug_p = _NAME_CONNECTOR_RE.sub("", sug_paren.group(1)).strip()
-        if _has_hebrew(src_p) != _has_hebrew(sug_p):
-            return False  # cross-script, unjudgeable -- see note below
-        return src_p != sug_p
-    src_stripped, sug_stripped = _strip_honorifics(src), _strip_honorifics(sug)
-    src_first = src_stripped.split()[0] if src_stripped.split() else ""
-    sug_first = sug_stripped.split()[0] if sug_stripped.split() else ""
-    # Cross-script (Hebrew vs non-Hebrew) comparison is unreliable without real
-    # transliteration -- MyHeritage often renders the same person's given name
-    # in Hebrew on one side and Latin on the other, sometimes inside a longer
-    # string that also contains the other script further along (found live
-    # 2026-09-10, e.g. source "Zipora Alving" vs tree "ציפורה אסתר Zipora Ester
-    # ... Levin" -- the tree's first TOKEN happens to be Hebrew even though a
-    # Latin match for "Zipora" appears right after it). Checked on the specific
-    # values being compared, not the whole name, so a Hebrave/Latin mismatch
-    # deeper in a composite string doesn't wrongly suppress a real conflict
-    # between two same-script names later in the string. Don't flag — err on letting through
-    # rather than blocking a match we can't judge across scripts.
-    if _has_hebrew(src_first) != _has_hebrew(sug_first):
-        return False
-    return src_first != sug_first
+    src_given, src_surname = _name_pools(src)
+    sug_given, sug_surname = _name_pools(sug)
+    return not (_pool_match(src_given, sug_given) and _pool_match(src_surname, sug_surname))
 
 
 def _extract_merge_conflicts(raw_text: str) -> list[tuple[str, str]]:

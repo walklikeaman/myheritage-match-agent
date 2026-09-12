@@ -33,6 +33,45 @@ error during processing → decision = "error" → log error, move on
 
 These go to `flagged_matches` table with full match JSON for human review.
 
+**Status (2026-09-12): `_names_conflict()` upgraded to handle spelling/transliteration variants.**
+Per Nikita 2026-09-12, after one family cluster (Orenstein/Klonsky/Radzyner)
+sustained a 90-100% conflict rate for days, re-tested against that cluster's
+history showed most of it was false positives, not real name mismatches:
+nicknames ("Sam"/"Samuel"), transliteration spelling ("Eliashiv"/"Elyashiv",
+"Raifman"/"Reifman"), slash-alternative lists MyHeritage itself lists
+("Yosef/Yoseph"), hyphenated compounds ("משה-יהודה-לייב"), a person's name
+recorded as only one of several given names they had ("Haim" vs "Joseph
+Haim"), a Spanish "nacida" maiden-name marker the code didn't recognize
+(only "born"/"née"/"לבית" were), and untitled Hebrew scholarly honorifics
+("הגאון") stacking after "הרב" and getting compared as if they were the name.
+`_names_conflict()` now splits each name into a given-name pool and a surname
+pool (`_name_pools()`) — sets of acceptable spellings, not one positional
+value — and requires overlap in BOTH pools to clear a pair; a shared surname
+alone is deliberately not enough, since that's the exact shape of a real
+wrong-person mismatch within one large family. A parenthetical aside is
+routed to the surname pool only if it resembles the surname (`(ORENSTEIN)`
+for "Oren") and to the given-name pool otherwise (`(Jacob)` glossing
+"Yaakov") — guessing "both pools" for every aside was tried first and
+backfired: an unrelated given-name gloss sitting in the surname pool could
+out-vote a legitimate cross-script surname match. `_trailing_surname_run()`
+walks backward from the last word to catch a surname repeated across several
+alternate spellings/scripts in a row (e.g. "...Orenstein אורנשטיין Urstein"),
+but only trusts a chain of 3+ (2 confirmed hops) — a single cross-script hop
+turned out to be indistinguishable from a given name simply sitting next to
+a Hebrew surname ("Joseph **Haim** אורנשטיין"), so a 2-long chain falls back
+to the plain last-word guess. Re-run against the full `merge_conflicts.jsonl`
+history (568 unique pairs): flagged conflicts dropped from 316 to 142 (55%);
+on the most recent live batch from the Orenstein cluster, 55 of 74 previously
+blocked pairs now clear automatically. Known remaining gaps, left alone
+deliberately rather than risk over-fitting: (1) a bare English/Hebrew
+name-translation pair with no shared spelling at all (e.g. "Isaac" for
+"Yitzhak") isn't recognized — that's a translation-equivalence table, a
+different feature than spelling-variant matching; (2) when a surname's only
+same-script comparable form sits one position before the tree's literal last
+word with no maiden-name marker to route it (e.g. "Rose Bloom" vs "Rose /
+Raisel **Lubanov** לובנוב"), the comparable Latin surname can still be missed.
+Both fail safe (stay flagged for manual review), not silently cleared.
+
 **Status (2026-09-10): checked BEFORE confirming, not just before saving.**
 The 2026-09-08 version below caught conflicts only after `Confirm` had already
 been clicked — the match link on MyHeritage's side was already created by the

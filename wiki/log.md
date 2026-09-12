@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-09-12] fix | Conflict heuristic now handles spelling/transliteration variants
+
+**Object**: `browser/smart_matches.py` (`_names_conflict`, `_name_pools`, `_trailing_surname_run`, `_variant_match`, `_expand_token`), `wiki/concepts/match-evaluation.md`
+**Scenario**: rule-change, operator-requested follow-up
+**Outcome**: ✅ shipped — 316→142 flagged conflicts (-55%) re-run against full `merge_conflicts.jsonl` history
+
+**What happened**: Per Nikita 2026-09-12 ("Да, доработай эвристику под орфографические варианты") — the Orenstein/Klonsky/Radzyner family cluster had sustained a 90-100% conflict rate for days, flagged for manual review every session. Pulled the full conflict history and hand-classified ~80 recent examples: the large majority were false positives from nicknames ("Sam"/"Samuel"), transliteration spelling ("Eliashiv"/"Elyashiv"), MyHeritage's own slash-alternative lists ("Yosef/Yoseph"), hyphenated compound names, a person recorded under only one of several given names, an unhandled Spanish "nacida" maiden-name marker, and an unhandled Hebrew honorific ("הגאון") — plus a structural bug where a surname repeated across 2-3 alternate spellings/scripts in a row only had its *last* spelling captured, silently losing the one that actually matched the source.
+
+Rewrote `_names_conflict()` around given-name/surname *pools* (sets of acceptable spellings — nickname, hyphen/slash expansions, parenthetical aliases) instead of a single positional first-token comparison, requiring overlap in *both* pools to clear a pair (a shared surname alone is deliberately never enough — that's exactly the shape of a real wrong-person mismatch within one big family). Iterated three times against real failures caught mid-build: (1) routing a bare parenthetical to both pools let an unrelated given-name gloss poison the surname comparison — fixed by routing based on which pool it actually resembles; (2) a naive backward extension for multi-spelling surnames swept a genuine given name ("Haim") into the surname pool just because it sat next to a Hebrew surname — fixed by requiring a 3+ token chain (2 confirmed hops) before trusting the extension, since a single hop can't be told apart from that false case.
+
+Two gaps left deliberately unfixed, both failing safe (stay flagged, not silently cleared): English/Hebrew name-translation pairs with no shared spelling ("Isaac"/"Yitzhak" — a different feature, a translation table); and a rare token-ordering case where a comparable surname spelling sits one position before the tree's literal last word with no maiden-name marker to route it. Full write-up: [[match-evaluation]].
+
+**Code changes**: 9bbbc98
+
+**Updated**: `browser/smart_matches.py`, `wiki/concepts/match-evaluation.md`
+
+---
+
 ## [2026-09-11] feat | Down to one browser window per session, not two
 
 **Object**: `auth/browser_auth.py` (`validate_and_save_session`), `main.py`

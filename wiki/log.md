@@ -4,6 +4,41 @@
 
 ---
 
+## [2026-09-15] incident | Mac reboot (OS upgrade) wiped runner + monitoring chain again — recreated and relaunched
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`
+**Scenario**: incident (recurrence of the 2026-09-11 compound-failure pattern)
+**Outcome**: ✅ recovered — runner recreated and relaunched, gap documented
+
+**What happened**: Operator said "запускай еще раз" at 02:04. Found `screen -ls`
+empty, `/tmp/mh_runner_smart_v1.sh` gone, and `uptime` showing the Mac had only
+been up 7 minutes — a reboot, this time apparently tied to an OS version bump
+(`Darwin 25.6.0` → `27.0.0` in the environment banner). The last session before
+the gap (`session_smart_20260914_203048.log`, ended 21:16:31, sleeping to
+~22:44:46) finished cleanly — nothing lost mid-session — but no new session ran
+from ~22:44 on 2026-09-14 until this recovery at 02:05 on 2026-09-15, roughly
+**3h20m** unattended. As with the 2026-09-11 incident, the standing hourly
+`ScheduleWakeup` monitoring loop did not catch this itself; the operator had to
+notice and prompt directly, since a Claude Code session restart kills the
+wakeup timer along with (in this case) the underlying OS session.
+
+Recreated `/tmp/mh_runner_smart_v1.sh` from the canonical content in the
+2026-09-08 "fix | Stop auto-confirming conflicting merge suggestions" log entry
+and relaunched via `SCREENDIR=/tmp/screendir-mh screen -dmS myheritage-smart
+bash /tmp/mh_runner_smart_v1.sh`. Confirmed alive (`main.py` running under
+`caffeinate` within seconds).
+
+**Known limitation, not fixed here** (third occurrence now — 2026-09-11, and
+this one): `ScheduleWakeup`-based monitoring does not survive an app/OS
+restart, and nothing outside the loop detects that the loop itself stopped. A
+`launchd` LaunchAgent would survive this class of failure but remains out of
+scope unless the operator asks for it specifically.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-12] fix | Conflict heuristic now handles spelling/transliteration variants
 
 **Object**: `browser/smart_matches.py` (`_names_conflict`, `_name_pools`, `_trailing_surname_run`, `_variant_match`, `_expand_token`), `wiki/concepts/match-evaluation.md`

@@ -72,6 +72,43 @@ word with no maiden-name marker to route it (e.g. "Rose Bloom" vs "Rose /
 Raisel **Lubanov** לובנוב"), the comparable Latin surname can still be missed.
 Both fail safe (stay flagged for manual review), not silently cleared.
 
+**Status (2026-09-16): two more false-positive causes fixed, one investigated
+and deliberately left alone.** Live monitoring on 2026-09-14 turned up a batch
+of new false positives once the runner moved past the core Orenstein/Klonsky
+cluster into other, more script-mixed families. Two were fixed:
+1. **Multiple separate parenthetical groups in one name.** `_extract_parens()`
+   replaced the old single greedy `\((.*)\)` regex, which spanned from the
+   FIRST "(" to the LAST ")" in the whole string — fine for one bracketed
+   group (even a nested one, e.g. "(née Lubanow (לובנוב))"), but for a name
+   with two SEPARATE groups (e.g. "Gilad (ORENSTEIN) אורנשטיין (או אורן)") it
+   swallowed the real surname text sitting *between* them into one bogus
+   aside, leaving only "Gilad" as the residual — given name and surname
+   silently swapped pools. The new function does a proper depth-tracked scan,
+   handling nesting within a group and multiple top-level groups correctly,
+   and routes each group independently.
+2. **Hebrew final-form letters** (סופיות: ן/מ/ך/ף/ץ used only at the end of a
+   word) weren't normalized, so "אורן" (Oren, ends in final נ) was never
+   recognized as a prefix of "אורנשטיין" (Orenstein, plain נ mid-word) even
+   though it plainly is one — added to the same translation table as the
+   existing Cyrillic і/ё variants. This alone re-tested at +52 pairs newly
+   correctly cleared across the full `merge_conflicts.jsonl` history (660 →
+   609 flagged, of 1086 unique pairs), almost all "X Orenstein" vs "X
+   Orenstein Oren"-shaped duplicates.
+
+**Investigated and left alone**: a same-script "noise" token that isn't
+really a given name OR a surname (e.g. "La'awi" — a Hebrew tribal/occupational
+epithet, not a spelling variant of "Levin" — sitting next to the real given
+names in "Abraham Yechezkel Levin" vs "אברהם יחזקאל לוין **לעווי La'awi**
+Levin") can still block a match even though the actual surname ("Levin")
+matches exactly on both sides. Tried and rejected two fixes: filtering the
+noise word out (no textual basis to distinguish it from a real given-name
+mismatch) and loosening `_pool_match()` to route around it (this makes an
+ordinary same-surname/different-given-name conflict — e.g. two siblings
+"David Levin" vs "Abraham Levin" — silently clear too, since a short 2-token
+name always has only one comparable given-name pair). No safe general fix
+found; stays flagged (fails safe), documented as a residual limitation rather
+than shipped half-fixed.
+
 **Status (2026-09-10): checked BEFORE confirming, not just before saving.**
 The 2026-09-08 version below caught conflicts only after `Confirm` had already
 been clicked — the match link on MyHeritage's side was already created by the

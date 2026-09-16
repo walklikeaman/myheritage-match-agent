@@ -198,6 +198,14 @@ _MERGE_CHOICE_RE = re.compile(r"Выберите (.+?) в Вашем семей�
 _CYRILLIC_VARIANT_TABLE = str.maketrans({
     "і": "и", "І": "И", "є": "е", "Є": "Е", "ґ": "г", "Ґ": "Г", "ї": "и", "Ї": "И",
     "ё": "е", "Ё": "Е",
+    # Hebrew final-form letters (סופיות), used only at the end of a word --
+    # e.g. "אורן" (Oren) ends in ן (final nun) while "אורנשטיין" (Orenstein)
+    # has plain נ in the middle, so without this, "Oren" is not recognized as
+    # a prefix of "Orenstein" even though it plainly is one. Found live
+    # 2026-09-14. Normalizing to the regular form makes prefix/substring and
+    # fuzzy-ratio comparisons see them as the same letter regardless of
+    # position, same idea as the Cyrillic variants above.
+    "ן": "נ", "ם": "מ", "ך": "כ", "ף": "פ", "ץ": "צ",
 })
 
 _UNKNOWN_PLACEHOLDER_RE = re.compile(
@@ -230,9 +238,36 @@ _HONORIFIC_PREFIX_RE = re.compile(
 # name, would otherwise pollute the first token compared.
 _NUMERIC_PREFIX_RE = re.compile(r"^\d+[-.)]\s*")
 
-# Outermost parenthetical aside, e.g. "(née Lubanow (לובנוב))" -- greedy so
-# nested parens are captured as one aside rather than only the innermost pair.
-_PAREN_RE = re.compile(r"\((.*)\)")
+def _extract_parens(name: str) -> tuple[str, list[str]]:
+    """Remove every top-level parenthetical group from name, returning the
+    residual text plus each group's inner content as a separate string. One
+    level of nesting inside a group (e.g. "(née Lubanow (לובנוב))") is kept
+    as raw text within that group's aside, not split out. Two SEPARATE
+    top-level groups (e.g. "Gilad (ORENSTEIN) אורנשטיין (או אורן)") are two
+    entries, not one -- found live 2026-09-14 that a single greedy
+    first-"("-to-last-")" regex swallowed the real surname text sitting
+    BETWEEN two such groups into a bogus "aside", leaving only "Gilad" as
+    the residual and silently swapping given name and surname. Unbalanced
+    parens fall back to no extraction at all rather than guessing."""
+    if name.count("(") != name.count(")"):
+        return name, []
+    residual = []
+    asides = []
+    depth = 0
+    start = None
+    for i, ch in enumerate(name):
+        if ch == "(":
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0 and start is not None:
+                asides.append(name[start:i])
+                start = None
+        elif depth == 0:
+            residual.append(ch)
+    return "".join(residual), asides
 
 
 def _normalize_name(name: str) -> str:
@@ -330,21 +365,33 @@ def _name_pools(name: str) -> tuple[set[str], set[str]]:
     alternate given name (e.g. '(Jacob)') or a shortened surname (e.g.
     '(ORENSTEIN)' for 'Oren'), so it's added to both pools."""
     name = _NUMERIC_PREFIX_RE.sub("", _strip_honorifics(name))
-    aside_pool: set[str] = set()
-    aside_is_surname_only = False
-    paren = _PAREN_RE.search(name)
-    if paren:
-        name = name[: paren.start()] + name[paren.end():]
-        aside_raw = paren.group(1).replace("(", " ").replace(")", " ")
-        if _NAME_CONNECTOR_RE.search(aside_raw):
-            aside_raw = _NAME_CONNECTOR_RE.sub(" ", aside_raw)
-            aside_is_surname_only = True
-        for tok in aside_raw.split():
-            aside_pool.update(_expand_token(tok))
+    residual, aside_texts = _extract_parens(name)
 
-    tokens = name.split()
+    # Each parenthetical is routed independently: one marked with a née/born/
+    # לבית/nacida connector is a surname alias (maiden/birth name); a bare one
+    # could be either an alternate given name (e.g. "(Jacob)" glossing
+    # "Yaakov") or a shortened/expanded surname (e.g. "(ORENSTEIN)" for
+    # "Oren") -- found live 2026-09-12 that guessing "both pools" for a bare
+    # aside backfires (an unrelated given-name gloss landing in the surname
+    # pool can out-vote a legitimate cross-script surname bypass), so it's
+    # routed by whether it actually resembles the surname computed below.
+    aside_pools: list[tuple[set[str], bool]] = []
+    for aside_raw in aside_texts:
+        aside_raw = aside_raw.replace("(", " ").replace(")", " ")
+        is_surname_only = bool(_NAME_CONNECTOR_RE.search(aside_raw))
+        if is_surname_only:
+            aside_raw = _NAME_CONNECTOR_RE.sub(" ", aside_raw)
+        pool: set[str] = set()
+        for tok in aside_raw.split():
+            pool.update(_expand_token(tok))
+        aside_pools.append((pool, is_surname_only))
+
+    tokens = residual.split()
     if not tokens:
-        return (set(), aside_pool)
+        merged: set[str] = set()
+        for pool, _ in aside_pools:
+            merged.update(pool)
+        return (set(), merged)
 
     surname_run = _trailing_surname_run(tokens)
     surname_seed: set[str] = set()
@@ -354,21 +401,15 @@ def _name_pools(name: str) -> tuple[set[str], set[str]]:
     for tok in tokens[: len(tokens) - len(surname_run)]:
         given_pool.update(_expand_token(tok))
 
-    # A bare (non-connector) parenthetical could be an alternate given name
-    # (e.g. "(Jacob)" glossing "Yaakov") or a shortened/expanded surname (e.g.
-    # "(ORENSTEIN)" for "Oren") -- found live 2026-09-12 that guessing "both
-    # pools" backfires: an unrelated given-name gloss landing in the surname
-    # pool can out-vote a legitimate cross-script surname bypass. Route it by
-    # whether it actually resembles the surname; only fall back to "both"
-    # when there's no signal either way.
-    aside_matches_surname = aside_pool and any(
-        _variant_match(a, b) for a in aside_pool for b in surname_seed if _has_hebrew(a) == _has_hebrew(b)
-    )
-    if aside_is_surname_only or aside_matches_surname:
-        surname_pool = surname_seed | aside_pool
-    else:
-        surname_pool = surname_seed
-        given_pool |= aside_pool
+    surname_pool = set(surname_seed)
+    for pool, is_surname_only in aside_pools:
+        matches_surname = any(
+            _variant_match(a, b) for a in pool for b in surname_seed if _has_hebrew(a) == _has_hebrew(b)
+        )
+        if is_surname_only or matches_surname:
+            surname_pool |= pool
+        else:
+            given_pool |= pool
     return (given_pool, surname_pool)
 
 

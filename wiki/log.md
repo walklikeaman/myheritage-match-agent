@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-09-16] fix | Two more conflict-heuristic false-positive causes fixed (multi-paren, Hebrew final letters)
+
+**Object**: `browser/smart_matches.py` (`_extract_parens`, `_name_pools`, `_CYRILLIC_VARIANT_TABLE`), `wiki/concepts/match-evaluation.md`
+**Scenario**: rule-change, operator-approved follow-up ("давай")
+**Outcome**: ✅ shipped — 660→609 flagged conflicts on full historical dataset (52 newly cleared, 1 newly flagged in the safe direction)
+
+**What happened**: Routine monitoring on 2026-09-14 found the runner had moved past the core Orenstein/Klonsky cluster into other families and surfaced 2 new concrete false-positive bugs, reported to the operator and held pending approval (per this project's standing rule not to touch the heuristic without a go-ahead). Operator approved with "давай" on 2026-09-16.
+
+Fixed: (1) `_extract_parens()` replaces the old greedy first-"("-to-last-")" regex, which silently swallowed real surname text sitting between TWO separate parenthetical groups into one bogus aside (e.g. "Gilad (ORENSTEIN) אורנשטיין (או אורן)" left only "Gilad" as the residual, swapping given name and surname between pools) — the new version does a depth-tracked scan handling nesting within a group and multiple top-level groups correctly. (2) Hebrew final-form letters (ן/מ/ך/ף/ץ) weren't normalized to their regular forms, so "אורן" (Oren) was never recognized as a prefix of "אורנשטיין" (Orenstein) even though it plainly is one — added to the same translation table as the existing Cyrillic і/ё variants; this alone accounts for +52 pairs newly correctly cleared, almost all "X Orenstein" vs "X Orenstein Oren" duplicates.
+
+A third reported false-positive cause ("La'awi", an unrelated Hebrew epithet coincidentally sitting next to real given names) was investigated and deliberately left unfixed — every general fix tried also silently cleared genuine same-surname/different-given-name conflicts (e.g. two siblings sharing a surname), which is unacceptable. Documented as a residual limitation in `wiki/concepts/match-evaluation.md` rather than shipped half-fixed.
+
+**Code changes**: 24fc8aa
+
+**Updated**: `browser/smart_matches.py`, `wiki/concepts/match-evaluation.md`
+
+---
+
 ## [2026-09-15] incident | Mac reboot (OS upgrade) wiped runner + monitoring chain again — recreated and relaunched
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`

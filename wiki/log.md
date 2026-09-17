@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-09-16] incident | Stuck inter-session sleep recurred twice in one evening — self-resolved, no action taken
+
+**Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process
+**Scenario**: incident (recurrence of the 2026-08-13/08-28/09-09/09-10 stuck-sleep bug)
+**Outcome**: ✅ self-recovered both times — no kill/restart needed, monitored only
+
+**What happened**: Two separate stuck-sleep episodes during routine monitoring:
+1. A clean-exit pause (`sleep 4325`, ~72min nominal) started 14:44 and was still
+   running at the 16:32 check-in (~37min overrun at that point) — watched per
+   the "don't kill before 1.5h+ past the 165min ceiling" threshold rather than
+   restarting on first sign of lateness; it resolved on its own by ~16:38 (~42min
+   total overrun, next session started normally).
+2. A **crash-backoff** pause (`sleep 300`, 5min nominal) started ~17:33 after a
+   session hit `net::ERR_INTERNET_DISCONNECTED` mid-run — this one stretched to
+   roughly **4 hours** before the next session started at 21:36. This is by far
+   the most extreme overrun logged for this bug (prior incidents were ~4-5.5x
+   nominal on the much longer clean-exit pauses; this was ~48x nominal on a
+   pause that's normally just a few minutes). Coinciding with a genuine network
+   outage right before it makes "the MacBook itself slept/lost network for
+   hours" (lid closed, moved, etc.) a plausible explanation, not just
+   `caffeinate -i`'s known idle-sleep-only limitation.
+
+Neither episode required intervention — both resolved on their own and the
+runner picked back up cleanly, VIP counts and recent conflict-detection code
+both intact. Not killed/restarted; no code or script changes made.
+
+**Still not root-caused** — now a 6th occurrence overall, and the severity
+range keeps widening (from ~1.5h overruns up to ~4h). The prior noted
+direction if this keeps escalating remains open: `caffeinate -s` (prevent
+full system sleep, not just idle sleep) instead of/alongside `-i`, since a
+laptop closing its lid or losing power ignores `-i` entirely. Still out of
+scope for a script change without the operator asking for it specifically.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-16] fix | Two more conflict-heuristic false-positive causes fixed (multi-paren, Hebrew final letters)
 
 **Object**: `browser/smart_matches.py` (`_extract_parens`, `_name_pools`, `_CYRILLIC_VARIANT_TABLE`), `wiki/concepts/match-evaluation.md`

@@ -4,6 +4,39 @@
 
 ---
 
+## [2026-09-19] incident | Mac reboot again — ~26h gap, runner and monitoring chain both dead; recreated and relaunched
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`
+**Scenario**: incident (third reboot-wipe: 2026-09-11, 2026-09-15, now)
+**Outcome**: ✅ recovered — script recreated, runner relaunched, confirmed alive
+
+**What happened**: The scheduled 04:23 check on 2026-09-17 (watching a stuck
+inter-session pause, 7th recurrence) never fired at its time; the next wakeup
+landed 2026-09-19 22:31 local (machine timezone now IDT again). `uptime` showed
+the Mac up only ~1 day, `screen -ls` empty, `/tmp/mh_runner_smart_v1.sh` gone.
+The last session log (`session_smart_20260918_201215.log`, 20:12-20:17 on
+09-18) has no `[runner]` line — killed mid-run (8 CONFLICT / 1 OK / 2 ERROR
+so far), consistent with the reboot landing around then. No data lost beyond
+that partial session: conflicts are skipped pre-confirm and OK saves are
+already committed to the tree/graph. Gap in matching: roughly 26 hours. The
+stuck-sleep watch from 09-17 was overtaken by the reboot before it could
+resolve either way, so that 7th recurrence's outcome is unknown.
+
+Recreated the script from the canonical copy in the 2026-09-08 entry and
+relaunched via `SCREENDIR=/tmp/screendir-mh screen -dmS myheritage-smart bash
+/tmp/mh_runner_smart_v1.sh`. `main.py` running under `caffeinate` within seconds.
+
+**Known limitation, not fixed** (same as 2026-09-11 / 2026-09-15): both the
+runner and the `ScheduleWakeup` watchdog die with the machine; only OS-level
+supervision (a `launchd` LaunchAgent, which would also relaunch the runner at
+login and survive `/tmp` being wiped if the script lived in the repo) would
+survive this. Third occurrence in 8 days now — worth offering to the operator.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-16] incident | Stuck inter-session sleep recurred twice in one evening — self-resolved, no action taken
 
 **Object**: `screen` session `myheritage-smart`, `caffeinate -i sleep` child process

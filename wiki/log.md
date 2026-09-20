@@ -4,6 +4,38 @@
 
 ---
 
+## [2026-09-20] incident | Mac slept ~7h mid-session, then rebooted again — runner recreated (4th reboot-wipe in 9 days)
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`
+**Scenario**: incident (sleep + reboot)
+**Outcome**: ✅ recovered — script recreated, runner relaunched, confirmed alive
+
+**What happened**: Two related events on 2026-09-20. (1) Session
+`session_smart_20260920_061342.log` shows a 440-minute hole (06:18 → 13:38): the
+Mac slept about 7 hours mid-session and the process resumed on its own
+afterwards, finishing cleanly (96 CONFLICT / 1 ERROR / 3 OK; the one error was
+`ERR_INTERNET_DISCONNECTED` right at wake-up). That is direct evidence for the
+long-standing stuck-sleep hypothesis: `caffeinate -i` only blocks *idle* sleep,
+not lid-close/energy-saver sleep, so the "stuck inter-session pause" is very
+likely the whole machine being asleep. The same window produced a transient
+`ENOSPC` on the tool output file; `df` showed 18 GB free (96% used), project
+logs only 40 MB, so not a project problem, but the disk is nearly full.
+(2) At the 16:44 check the Mac had rebooted 26 minutes earlier (`uptime`),
+`screen -ls` was empty and `/tmp/mh_runner_smart_v1.sh` was gone. The last
+session had finished at 14:15 with a 8908s pause ending ~16:44, so almost
+nothing was lost. Recreated the script from the canonical copy in the
+2026-09-08 entry and relaunched; `main.py` running within seconds.
+
+**Open, awaiting operator**: (a) switch to `caffeinate -s` (prevent full system
+sleep) in the runner script, (b) a `launchd` LaunchAgent with the script kept in
+the repo so it survives `/tmp` wipes and relaunches after reboot. Reboots so
+far: 2026-09-11, 09-15, 09-19, 09-20. Not done without being asked.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-19] incident | Mac reboot again — ~26h gap, runner and monitoring chain both dead; recreated and relaunched
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`

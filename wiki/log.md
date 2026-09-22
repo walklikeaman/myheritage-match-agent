@@ -4,6 +4,31 @@
 
 ---
 
+## [2026-09-22] incident | Mac reboot #6 wiped Playwright's Chromium cache too — reinstalled, runner recreated
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`, `~/Library/Caches/ms-playwright`
+**Scenario**: incident (reboot, this time also took the browser binary)
+**Outcome**: ✅ recovered — `playwright install chromium` reinstalled, runner relaunched
+
+**What happened**: A ~12h monitoring gap ended with the Mac freshly rebooted
+(`uptime` showed 2 minutes). Recreated `/tmp/mh_runner_smart_v1.sh` as usual,
+but the first new session immediately crashed with `BrowserType.launch:
+Executable doesn't exist at .../Google Chrome for Testing.app` --
+`~/Library/Caches/ms-playwright` was gone entirely (not just `/tmp`). Disk
+space had also changed from the tight ~18GB free noted on 09-20/09-21 to
+~94GB free, consistent with whatever wiped `/tmp` and the Playwright cache
+this time being a more thorough reset (OS reinstall/reset rather than a
+plain restart). Since a missing browser binary is not something the crash's
+300s retry loop can fix on its own -- it would have looped indefinitely --
+ran `python3 -m playwright install chromium` to restore
+`chrome-mac-arm64/Google Chrome for Testing.app`, then let the runner's own
+retry cycle pick it up on the next attempt.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-20] incident | Mac slept ~7h mid-session, then rebooted again — runner recreated (4th reboot-wipe in 9 days)
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`

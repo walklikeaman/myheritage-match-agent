@@ -44,6 +44,36 @@ Hybrid: **Playwright for all writes**, Family Graph API for reads (future). The 
 10. Logging, error handling, resume logic
 11. 10-match pilot → review → iterate → 50-match → full run
 
+## Standing runner (since 2026-10-12)
+The unattended `--smart-only --sort-by-relationship` loop is supervised by
+**launchd**, not by a `screen` session in `/tmp`.
+
+```
+login / reboot ──► launchd (gui/501, Aqua session)
+                     └─► scripts/mh_runner_smart.sh   (loop, lives in the repo)
+                           ├─ playwright install chromium   (no-op if current)
+                           ├─ python3 main.py --smart-only ... --background
+                           ├─ python3 notify_vip.py
+                           └─ pause: clean 45-165min | crash 300s | WAF 6h
+```
+
+- Job definition: `scripts/com.walklikeaman.myheritage-runner.plist`, copied to
+  `~/Library/LaunchAgents/`. `RunAtLoad` + `KeepAlive` restart it after a
+  reboot or if the loop dies.
+- The browser runs `--background`: new headless Chromium (`channel="chromium"`),
+  no window at all. Probe 2026-10-12: it passes the WAF (no challenge, compare
+  page renders, 8-12 match sessions ran clean). The old `headless=True`
+  (chrome-headless-shell) is still blocked. `--visible` stays as a debug mode;
+  its window is parked at `_OFFSCREEN_BOUNDS` (left -20000, top 5000), which still
+  leaves a ~40px sliver on a two-display Mac.
+- The job is still a GUI-session user agent (`LimitLoadToSessionType Aqua`).
+- Why: the old `screen` runner in `/tmp` died with every reboot (7 reboots in
+  one month, one gap of ~16 days — see `wiki/log.md` 2026-10-12).
+- Control: `launchctl print gui/$(id -u)/com.walklikeaman.myheritage-runner`,
+  stop with `launchctl bootout gui/$(id -u)/com.walklikeaman.myheritage-runner`.
+  Launchd's own output goes to `~/Library/Logs/myheritage-runner.log`;
+  per-session logs stay in `logs/session_smart_*.log`.
+
 ## Resume capability
 On startup, `main.py` queries `processed_matches` for all known match IDs, then skips any match that's already been processed. This makes the agent safely restartable after any interruption.
 

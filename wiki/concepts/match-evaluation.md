@@ -139,6 +139,14 @@ structured record of the tree's existing data. Date-conflict and
 relationship-restructure detection are still unimplemented — this page's
 original design for those two remains the intended direction, not yet built.
 
+**Status (2026-10-12): year check added before Confirm.** Names alone can agree for
+different people, so `_pre_confirm_year_conflicts()` also compares birth and death years
+of every relative that exists in the tree. Gap > 5 years on a shared fact sends the match
+to CONFLICT (never confirmed), like a name conflict. Threshold 5 because 1 year gaps
+(1814/1815) are routine. In live runs it fired once in ~30 matches, together with a name
+conflict, so it did not change the CONFLICT rate (~68-75%). The "born/geboren/урожд."
+connector tweak was NOT applied (awaiting operator).
+
 ## Extraction priority (when saving data)
 1. Birth date + place (high value, often missing)
 2. Death date + place

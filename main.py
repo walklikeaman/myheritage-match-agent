@@ -116,7 +116,7 @@ async def capture_session() -> None:
 
 
 async def run(
-    mode: str, headless: bool, max_matches: int, scroll_rounds: int,
+    mode: str, headless: bool, max_matches: int, scroll_rounds: int, new_headless: bool = False,
     wait_for_captcha: bool = False, max_sources: int = 5, sort_by: str = "count",
 ) -> None:
     from playwright.async_api import async_playwright
@@ -128,7 +128,7 @@ async def run(
         sys.exit(1)
 
     async with async_playwright() as pw:
-        context = await create_browser_context(pw, headless=headless)
+        context = await create_browser_context(pw, headless=headless, new_headless=new_headless)
         # One page for the whole session (login check + the actual work) --
         # 2026-09-11: used to be two separate context.new_page() calls, each a
         # separate top-level OS window, popping up twice per session. See
@@ -138,7 +138,8 @@ async def run(
         # capture_session()'s window above -- that one needs to be visible
         # for manual login.
         page = await context.new_page()
-        await _move_window_offscreen(page)
+        if not headless:
+            await _move_window_offscreen(page)
         is_auth = await validate_and_save_session(context, page=page)
         if not is_auth:
             console.print("[red]Auth failed.[/red] Run: python main.py --capture-session")
@@ -203,6 +204,9 @@ async def run(
 def main() -> None:
     parser = argparse.ArgumentParser(description="MyHeritage automation agent")
     parser.add_argument("--visible", action="store_true", help="Non-headless browser (debug)")
+    parser.add_argument("--background", action="store_true",
+                        help="New headless Chromium: no window at all, passes the WAF "
+                             "(probe 2026-10-12). Use instead of --visible for unattended runs")
     parser.add_argument("--max", type=int, default=MAX_MATCHES_PER_SESSION,
                         help=f"Max matches per session (default: {MAX_MATCHES_PER_SESSION})")
     parser.add_argument("--scroll", type=int, default=8,
@@ -252,6 +256,7 @@ def main() -> None:
     asyncio.run(run(
         mode=mode,
         headless=not args.visible,
+        new_headless=args.background,
         max_matches=args.max,
         scroll_rounds=args.scroll,
         wait_for_captcha=args.wait_for_captcha,

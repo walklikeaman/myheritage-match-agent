@@ -72,6 +72,13 @@ confirming — see [match-evaluation](match-evaluation.md) for how this is now u
 to skip a match entirely instead of confirming first and discovering the
 mismatch only in the post-confirm wizard.
 
+**Facts inside a row (2026-10-12):** each side's `innerText` carries the relative's
+relation and, when known, `Рожден(а) в YYYY - place` and `Умер(ла) в YYYY - place`.
+`_COMPARE_RELATIVES` parses the four years (`mineBorn/theirsBorn/mineDied/theirsDied`);
+`_pre_confirm_year_conflicts()` flags a pair when both sides state the same fact and
+the years differ by more than 5. The page also has a main-person fact table (birth,
+death, residence, burial) for both trees; no match-confidence percentage exists.
+
 ### Wizard page (showExtractWizard)
 URL: `/research/collection-1/семейные-деревья-myheritage?action=showExtractWizard&itemId=...&indId=...&s=...`
 
@@ -150,6 +157,13 @@ vendors. Any future "wizard-empty at scale, 0% success across multiple people" s
 be treated as a probable **third undetected challenge variant** — probe live with a fresh
 unconfirmed match, dump `iframe` src list + body length + HTML length, and extend
 `_IS_BOT_CHALLENGE` rather than assuming it's a render race or a stale-list issue.
+
+**Relatives expander (2026-10-12):** `Извлечь информацию еще об N родственниках` is a
+toggle that stays in the DOM after a click. `_CLICK_MORE_RELATIVES` clicks each one
+once, marking the element and its descendants with `data-mh-expanded` (a wrapper and a
+nested element carry the same text; clicking both toggled it twice). A first loop
+without the mark clicked one toggle 6 times. Checkbox `.checked` is NOT reliable
+(Angular), so it reads 0; use the select-all class `copied_all_from_all_true`.
 
 ### Success indicators
 

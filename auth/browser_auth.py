@@ -194,7 +194,18 @@ _LAUNCH_ARGS = [
 # height (~33px) regardless of what's requested, so only `left` reliably moves;
 # pushing it fully past the window's own width is enough to get it off most of
 # the screen.
-_OFFSCREEN_BOUNDS = {"left": -1400, "top": 33}
+#
+# 2026-10-12: with TWO displays (laptop panel at x -1512..0 left of the main
+# display) the old left=-1400 parked the window fully ON the laptop panel, i.e.
+# the "off-screen" window was a plain visible window. macOS never lets a window
+# leave every display (it keeps ~40px on one), but a CDP move to an extreme
+# corner makes it a 40x74px sliver in the bottom-left corner of the leftmost
+# display. Probed live on a local page: rAF/IntersectionObserver/timers all stay
+# healthy at that position (the --disable-backgrounding-occluded-windows launch
+# arg keeps the renderer awake). Hiding the whole app (Cmd+H) was also tried and
+# rejected: macOS App-Naps it (timers/frames drop to 0), and any new window
+# un-hides it. A `--window-position` launch arg is clamped back onto the display.
+_OFFSCREEN_BOUNDS = {"left": -20000, "top": 5000}
 
 
 async def _move_window_offscreen(page: Page) -> None:
@@ -276,19 +287,25 @@ async def _check_logged_in(page: Page) -> bool:
         return False
 
 
-async def create_browser_context(playwright, headless: bool = False) -> BrowserContext:
+async def create_browser_context(
+    playwright, headless: bool = False, new_headless: bool = False,
+) -> BrowserContext:
     """
     Launch Chromium and return an authenticated BrowserContext.
+
+    new_headless=True runs full Chromium (channel="chromium") with no window at all.
+    Probe 2026-10-12: unlike the old chrome-headless-shell, it passes the WAF
+    (no challenge, compare page renders). Needs headless=True as well.
 
     Tries in order:
     1. Load Playwright storage_state from SESSION_FILE (most reliable)
     2. Load raw cookies from COOKIES_FILE and convert them
     3. Return unauthenticated context (recon mode / manual login)
     """
-    browser = await playwright.chromium.launch(
-        headless=headless,
-        args=_LAUNCH_ARGS,
-    )
+    launch_kwargs = {"headless": headless, "args": _LAUNCH_ARGS}
+    if headless and new_headless:
+        launch_kwargs["channel"] = "chromium"
+    browser = await playwright.chromium.launch(**launch_kwargs)
 
     viewport = _randomized_viewport()
     context = None

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.walklikeaman.myheritage-runner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/walklikeaman/GitHub/My Heritage/scripts/mh_runner_smart.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/walklikeaman/GitHub/My Heritage</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- The browser runs visible (the WAF blocks headless), so it needs the
+         logged-in GUI session, not a background daemon. -->
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/walklikeaman/Library/Logs/myheritage-runner.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/walklikeaman/Library/Logs/myheritage-runner.log</string>
+</dict>
+</plist>

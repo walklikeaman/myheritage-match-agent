@@ -492,9 +492,36 @@ _COMPARE_RELATIVES = """
     const mineMissing = !!item.querySelector('.individual .missing_relative');
     const mineName = mine ? (mine.querySelector('.individual_name')?.textContent?.trim() || null) : null;
     const theirsName = theirs ? (theirs.querySelector('.individual_name')?.textContent?.trim() || null) : null;
-    return {mineMissing, mineName, theirsName};
+    // Years from the "Рожден(а) в 1783" / "Умер(ла) в 1847" lines of each side.
+    const yr = (el, re) => { const m = el ? (el.innerText || '').match(re) : null; return m ? parseInt(m[1], 10) : null; };
+    const born = /Рожден[а]?\\s+в\\s+(\\d{4})/, died = /Умерл?[а]?\\s+в\\s+(\\d{4})/;
+    return {mineMissing, mineName, theirsName,
+            mineBorn: yr(mine, born), theirsBorn: yr(theirs, born),
+            mineDied: yr(mine, died), theirsDied: yr(theirs, died)};
 })
 """
+
+# Largest birth/death-year gap between a tree relative and its Smart Match counterpart
+# that still counts as the same person. Genealogy sources are noisy (1814 vs 1815 is
+# routine), so only a clear gap flags the match for manual review.
+_MAX_YEAR_GAP = 5
+
+
+def _pre_confirm_year_conflicts(relatives: list[dict]) -> list[tuple[str, str]]:
+    """Indirect-feature check: relatives whose names agree can still be different
+    people. Flag a pair when both sides state the same fact (birth or death year)
+    and the years differ by more than _MAX_YEAR_GAP."""
+    conflicts = []
+    for r in relatives:
+        if r.get("mineMissing"):
+            continue
+        for label, a, b in (("birth", r.get("mineBorn"), r.get("theirsBorn")),
+                            ("death", r.get("mineDied"), r.get("theirsDied"))):
+            if a is None or b is None or abs(a - b) <= _MAX_YEAR_GAP:
+                continue
+            conflicts.append((f"{r.get('theirsName')} ({label} {b})",
+                              f"{r.get('mineName')} ({label} {a})"))
+    return conflicts
 
 
 def _pre_confirm_conflicts(relatives: list[dict]) -> list[tuple[str, str]]:
@@ -617,6 +644,24 @@ async def _poll_save_click(page: Page, timeout: float = 10.0, interval: float = 
 # Core match processing
 # ---------------------------------------------------------------------------
 
+_CLICK_MORE_RELATIVES = """
+() => {
+    const btn = [...document.querySelectorAll('a,button,[ng-click],[class*="extract"]')]
+        .find(e => e.offsetParent !== null && !e.dataset.mhExpanded &&
+                   e.textContent.trim().startsWith('Извлечь информацию еще об'));
+    if (!btn) return null;
+    // Mark it: the expander stays in the DOM after a click (live run 2026-10-12), so
+    // without a mark we would click the same toggle again and again.
+    // Mark the descendants too: the match is often a wrapper whose inner element has the
+    // same text, and clicking both would toggle one expander twice (live run 2026-10-12).
+    btn.dataset.mhExpanded = '1';
+    btn.querySelectorAll('*').forEach(c => { c.dataset.mhExpanded = '1'; });
+    const label = btn.textContent.trim().substring(0, 60);
+    window.angular.element(btn).triggerHandler('click');
+    return label;
+}
+"""
+
 _FIND_MANUAL_EXTRACT_LINK = """
 () => {
     const a = [...document.querySelectorAll('a')]
@@ -687,7 +732,7 @@ async def process_one_match(
 
         # --- Step 1b: Pre-confirm conflict check (before Confirm is ever clicked) ---
         relatives = await page.evaluate(_COMPARE_RELATIVES)
-        pre_conflicts = _pre_confirm_conflicts(relatives)
+        pre_conflicts = _pre_confirm_conflicts(relatives) + _pre_confirm_year_conflicts(relatives)
         if pre_conflicts:
             for src_name, tree_name in pre_conflicts:
                 logger.warning(
@@ -772,18 +817,20 @@ async def process_one_match(
         await page.evaluate(_CLICK_EXTRACT_ALL)
         await _sleep(2, 3)
 
-    # --- Step 3b: Expand additional relatives ("Извлечь информацию еще об N родственниках") ---
-    more_relatives = await page.evaluate("""
-        () => {
-            const btn = [...document.querySelectorAll('a,button,[ng-click],[class*="extract"]')]
-                .find(e => e.textContent.trim().startsWith('Извлечь информацию еще об'));
-            if (!btn) return null;
-            window.angular.element(btn).triggerHandler('click');
-            return btn.textContent.trim().substring(0, 60);
-        }
-    """)
-    if more_relatives:
+    # --- Step 3b: Expand ALL additional relatives ("Извлечь информацию еще об N родственниках") ---
+    # Each click can reveal another expander, so click until none is left (cap 6).
+    for _ in range(6):
+        more_relatives = await page.evaluate(_CLICK_MORE_RELATIVES)
+        if not more_relatives:
+            break
         logger.debug(f"  Relatives expansion: {more_relatives}")
+        await _sleep(2, 3)
+
+    # Expanded relatives start unchecked unless select-all is (re)applied: check the
+    # toggle state again and click it only if it is no longer on.
+    if not await page.evaluate(_CHECK_EXTRACT_SUCCESS):
+        logger.debug("  Select-all not active after expansion — clicking again")
+        await page.evaluate(_CLICK_EXTRACT_ALL)
         await _sleep(2, 3)
 
     fields = await page.evaluate(_FIELD_COUNT)

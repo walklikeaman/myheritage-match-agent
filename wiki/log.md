@@ -4,6 +4,31 @@
 
 ---
 
+## [2026-10-12] update | Windowless runner, full relative expansion, year check, launchd on
+
+**Object**: `main.py --background`, `browser/smart_matches.py`, `auth/browser_auth.py`, `scripts/`
+**Scenario**: rule-change
+**Outcome**: ✅ success — runner live under launchd, 4 test sessions clean
+
+**What happened**: Per Nikita 2026-10-12 the browser window must not show on the
+screen, and every confirmation must extract everything and check indirect signs.
+(1) New headless Chromium (`channel="chromium"`) passes the WAF, so the runner now
+uses `--background` with no window. (2) Logs show "Извлечь всю информацию" was already
+clicked on every confirm. The gap was the "еще об N родственниках" expander, clicked
+at most once; now each expander is clicked once via a mark, after a first loop
+clicked one toggle 6 times and a second clicked it twice (wrapper plus nested element).
+(3) New pre-confirm check on birth/death years (gap > 5). (4) The screen runner is
+replaced by launchd (`com.walklikeaman.myheritage-runner`, approved by the operator).
+
+**Verified**: bgtest4 (12 matches): 3 saved, one expansion click each, 9 CONFLICT, no
+captcha. Earlier tests: 4 matches saved with the older loop may hold incomplete relative
+data (offered `--extract-confirmed` re-run). `data/agent.db` is empty and unused; the real
+journal is `data/graph_updates.jsonl`.
+
+**Updated**: `wiki/concepts/{selectors,match-evaluation,agent-architecture}.md`.
+
+---
+
 ## [2026-10-12] incident | ~16-day outage after a Mac reboot — runner and watchdog both dead, relaunched
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`

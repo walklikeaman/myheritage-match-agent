@@ -4,6 +4,38 @@
 
 ---
 
+## [2026-10-12] incident | ~16-day outage after a Mac reboot — runner and watchdog both dead, relaunched
+
+**Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`
+**Scenario**: incident (reboot wipe; longest gap so far)
+**Outcome**: ✅ recovered — script recreated, runner relaunched, first session started
+
+**What happened**: The last session log is `session_smart_20260925_224738.log`
+(ended 2026-09-25 23:09). After that no session ran until the operator
+prompted "Продолжи, процесс" on 2026-10-12 at 01:11. `uptime` showed the Mac
+up only 33 minutes, `screen -ls` empty and `/tmp/mh_runner_smart_v1.sh` gone.
+The `ScheduleWakeup` watchdog chain also died, so nothing noticed for about
+**16 days**. This is the longest outage so far (earlier gaps: 14h on 09-11,
+3h on 09-15, 26h on 09-19). No data was lost; conflicts are skipped before
+confirm and saves are committed per match.
+
+Playwright's Chromium cache survived this time (`chromium-1208` and a newer
+`chromium-1217` are both present), so only the runner script needed
+recreating. Recreated it from the canonical copy in the 2026-09-08 entry and
+relaunched via `SCREENDIR=/tmp/screendir-mh screen -dmS myheritage-smart bash
+/tmp/mh_runner_smart_v1.sh`. First session started and loaded the saved
+login session. CI is green (last run 2026-09-16).
+
+**Still open, awaiting the operator**: a `launchd` LaunchAgent (script kept in
+the repo) and `caffeinate -s`. This outage is the clearest case for it: with
+a LaunchAgent the runner would have restarted by itself at login, and no
+16-day gap would have happened. Not built without being asked.
+
+**Code changes**: none.
+**Updated**: `wiki/log.md`.
+
+---
+
 ## [2026-09-22] incident | Mac reboot #6 wiped Playwright's Chromium cache too — reinstalled, runner recreated
 
 **Object**: `/tmp/mh_runner_smart_v1.sh`, screen session `myheritage-smart`, `~/Library/Caches/ms-playwright`

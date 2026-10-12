@@ -15,7 +15,7 @@ import json
 import random
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from loguru import logger
 from playwright.async_api import Page
@@ -479,6 +479,36 @@ def _append_conflict_flag(
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:  # noqa: BLE001 -- append-only write, must never raise
         logger.debug(f"  Conflict flag write skipped: {e}")
+
+
+# A match flagged CONFLICT stays "pending" on the site, so every session re-opened the
+# same ones first (live 2026-10-12: 98 of 100 matches in a session were repeat
+# conflicts, 2 real confirms). Skip a match that was flagged since the last change to
+# the conflict rules, for up to _CONFLICT_RECHECK_DAYS days. Bump _RULES_CHANGED_AT
+# whenever the conflict heuristic changes, so older flags are re-judged once.
+_RULES_CHANGED_AT = "2026-10-12T00:40:00+00:00"   # maiden-name connectors + year check
+_CONFLICT_RECHECK_DAYS = 14
+
+
+def _recent_conflict_urls() -> set[str]:
+    """Match URLs flagged under the current rules within the recheck window."""
+    urls: set[str] = set()
+    try:
+        cutoff = max(
+            datetime.fromisoformat(_RULES_CHANGED_AT),
+            datetime.now(timezone.utc) - timedelta(days=_CONFLICT_RECHECK_DAYS),
+        )
+        with open(MERGE_CONFLICTS_FILE, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                    if datetime.fromisoformat(rec["ts"]) >= cutoff:
+                        urls.add(rec["match_url"])
+                except (ValueError, KeyError):
+                    continue
+    except OSError:
+        pass
+    return urls
 
 
 # 2026-09-10: catching conflicts only after Confirm (above) means the match LINK is
@@ -1072,6 +1102,9 @@ async def run_smart_matches_session(
     people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds, sort_by=sort_by)
     logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
+    known_conflicts = _recent_conflict_urls()
+    logger.info(f"{len(known_conflicts)} matches flagged CONFLICT under the current rules — skipping them")
+
     for person in people:
         if summary["processed"] >= max_matches:
             logger.info(f"Session cap ({max_matches}) reached — stopping")
@@ -1079,7 +1112,13 @@ async def run_smart_matches_session(
 
         logger.info(f"\n{'='*60}\n{person['name']} (ID: {person['id']}, ~{person['count']} matches)")
         match_urls = await get_person_match_urls(page, person["id"], match_type=2)
-        logger.info(f"  {len(match_urls)} pending Smart Matches")
+        pending = len(match_urls)
+        match_urls = [u for u in match_urls if u not in known_conflicts]
+        summary["known_conflict_skipped"] = summary.get("known_conflict_skipped", 0) + pending - len(match_urls)
+        logger.info(f"  {pending} pending Smart Matches ({pending - len(match_urls)} known conflicts skipped)")
+        if not match_urls:
+            await _sleep(1, 2)
+            continue
 
         for i, url in enumerate(match_urls):
             if summary["processed"] >= max_matches:

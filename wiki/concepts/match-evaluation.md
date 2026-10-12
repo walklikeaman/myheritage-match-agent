@@ -150,6 +150,15 @@ connectors "geboren", "geborene", "geb.", "урожд.", "урождённая" 
 and "Мария (урожд. Петрова)" vs "Мария Петрова" are no longer conflicts (checked on 6
 cases; real mismatches still conflict).
 
+**Status (2026-10-12): known conflicts are skipped.** A CONFLICT match stays pending on
+the site, so each session re-opened the same ones first: the 04:06 session spent 98 of 100
+matches on repeat conflicts (2 confirms), the 02:37 one 99 of 100. `_recent_conflict_urls()`
+reads `data/merge_conflicts.jsonl` and skips any pending match flagged within 14 days AND
+after `_RULES_CHANGED_AT` (bump it whenever the conflict heuristic changes, so older flags are
+re-judged once). Skipped matches do not count toward `--max`; a person with only known
+conflicts costs ~7 s (the list page). Live test: first confirm after ~3 min instead of
+after ~100 conflicts.
+
 ## Extraction priority (when saving data)
 1. Birth date + place (high value, often missing)
 2. Death date + place

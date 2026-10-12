@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-10-12] update | Skip known-conflict matches (session cap was burned on repeats)
+
+**Object**: `run_smart_matches_session`, `_recent_conflict_urls`
+**Scenario**: bugfix
+**Outcome**: ✅ success — live test confirmed a match within 3 minutes
+
+**What happened**: The hourly check showed 98 CONFLICT + 2 OK in the 04:06 session and
+99 + 1 in the 02:37 one. Conflicted matches stay pending, so the sort-by-relationship order
+re-opened the same ones every session and the 100-match cap ran out before real work.
+Now matches flagged under the current rules in the last 14 days are skipped without opening
+them. Heuristic changes bump `_RULES_CHANGED_AT` to re-judge older flags once. Stale
+flags (9456 lines, mostly older) are re-judged on the next session, which is intended: the
+maiden-name connector change may clear some.
+
+**Updated**: `browser/smart_matches.py`, `wiki/concepts/match-evaluation.md`.
+
+---
+
 ## [2026-10-12] update | caffeinate -s, maiden-name connectors, re-extract of confirmed matches
 
 **Object**: `scripts/mh_runner_smart.sh`, `_NAME_CONNECTOR_RE`, `--extract-confirmed`

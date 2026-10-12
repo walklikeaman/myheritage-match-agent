@@ -1112,6 +1112,7 @@ async def run_smart_matches_session(
     logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
     known_conflicts = _recent_conflict_urls()
+    list_failures = 0
     logger.info(f"{len(known_conflicts)} matches flagged CONFLICT under the current rules — skipping them")
 
     for person in people:
@@ -1120,7 +1121,22 @@ async def run_smart_matches_session(
             break
 
         logger.info(f"\n{'='*60}\n{person['name']} (ID: {person['id']}, ~{person['count']} matches)")
-        match_urls = await get_person_match_urls(page, person["id"], match_type=2)
+        # One slow page load must not end the whole session (live 2026-10-12 18:23: a 30 s
+        # goto timeout on a person's page crashed it). Skip that person; give up only
+        # after 5 failures in a row, which looks like a real outage rather than a blip.
+        try:
+            match_urls = await get_person_match_urls(page, person["id"], match_type=2)
+            list_failures = 0
+        except Exception as e:  # noqa: BLE001
+            list_failures += 1
+            logger.warning(f"  Could not load matches for this person ({type(e).__name__}) — skipping "
+                           f"[{list_failures}/5 in a row]")
+            if list_failures >= 5:
+                logger.error("  5 person-page failures in a row — aborting session")
+                summary["aborted"] = "navigation"
+                return summary
+            await _sleep(3, 6)
+            continue
         pending = len(match_urls)
         match_urls = [u for u in match_urls if u not in known_conflicts]
         summary["known_conflict_skipped"] = summary.get("known_conflict_skipped", 0) + pending - len(match_urls)

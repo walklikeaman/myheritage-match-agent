@@ -4,6 +4,23 @@
 
 ---
 
+## [2026-10-12] incident | A 30 s page timeout crashed a whole session
+
+**Object**: `run_smart_matches_session`, `get_person_match_urls`
+**Scenario**: bugfix
+**Outcome**: ✅ fixed — runner had already retried after its 300 s crash pause
+
+**What happened**: The 18:23 session died with `Page.goto: Timeout 30000ms` on a person's
+matches page; `[runner] crash (exit 1) -- sleeping 300s`, and the 18:42 session started
+normally. The skip-known-conflicts loop opens many more list pages than before, so a slow
+page is more likely to hit one. Now a failure on one person is logged and skipped; the
+session aborts only after 5 failures in a row (`aborted: navigation`, clean exit, normal
+pause).
+
+**Updated**: `browser/smart_matches.py`.
+
+---
+
 ## [2026-10-12] incident | Scroll stopped at 20 people, session ended after 1 match
 
 **Object**: `get_people_sorted_by_count` scroll loop

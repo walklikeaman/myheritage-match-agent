@@ -4,6 +4,23 @@
 
 ---
 
+## [2026-10-12] incident | Scroll stopped at 20 people, session ended after 1 match
+
+**Object**: `get_people_sorted_by_count` scroll loop
+**Scenario**: bugfix
+**Outcome**: ✅ fixed — test run found 220 people; runner restarted to skip the 2 h pause
+
+**What happened**: The 14:49 session logged "Scroll 1: no new people — stopping scroll"
+with 20 people (earlier sessions: 140-160), skipped 51 known conflicts, processed 1 match
+and paused 7307 s. The lazy load was slower than the 3-5 s wait, and one empty round ended
+the scroll. Now the scroll stops after 3 empty rounds in a row, waits 8-11 s after an empty
+one, and has 4 extra rounds. The test showed 220 people and still growing at the cap, so the
+pool of pending people is larger than 160.
+
+**Updated**: `browser/smart_matches.py`.
+
+---
+
 ## [2026-10-12] update | Skip known-conflict matches (session cap was burned on repeats)
 
 **Object**: `run_smart_matches_session`, `_recent_conflict_urls`

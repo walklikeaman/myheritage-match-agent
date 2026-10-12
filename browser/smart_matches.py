@@ -1061,21 +1061,30 @@ async def get_people_sorted_by_count(
     seen_ids: set[str] = set()
     all_people: list[dict] = []
 
-    for round_n in range(scroll_rounds):
+    # A single empty round is NOT the end of the list: live 2026-10-12 14:49 the lazy load
+    # was slower than the 3-5 s wait, the scroll stopped at 20 people (list had ~140), and
+    # the session ended after 1 match. Stop only after 3 empty rounds in a row, waiting
+    # longer after an empty one; allow 4 extra rounds so empties don't eat the page budget.
+    empty_rounds = 0
+    for round_n in range(scroll_rounds + 4):
         batch = await page.evaluate(_EXTRACT_PEOPLE)
         new = [p for p in batch if p["id"] not in seen_ids]
         for p in new:
             seen_ids.add(p["id"])
             all_people.append(p)
 
-        if not new and round_n > 0:
-            logger.debug(f"  Scroll {round_n}: no new people — stopping scroll")
-            break
+        if new:
+            empty_rounds = 0
+        elif round_n > 0:
+            empty_rounds += 1
+            if empty_rounds >= 3:
+                logger.debug(f"  Scroll {round_n}: no new people 3x in a row — stopping scroll")
+                break
 
         logger.debug(f"  Scroll {round_n}: +{len(new)} people (total {len(all_people)})")
         # Scroll to bottom to trigger infinite-load
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await _sleep(3, 5)
+        await _sleep(3, 5) if empty_rounds == 0 else await _sleep(8, 11)
 
     if sort_by == "count":
         all_people.sort(key=lambda p: p["count"], reverse=True)

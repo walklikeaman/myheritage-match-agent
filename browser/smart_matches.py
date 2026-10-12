@@ -1102,13 +1102,15 @@ async def run_smart_matches_session(
     scroll_rounds: int = 8,
     wait_for_captcha: bool = False,
     sort_by: str = "count",
+    match_type: int = 2,
 ) -> dict:
-    """Smart Matches (matchType=2) session — largest families first, or closest relatives
-    first when sort_by="relationship"."""
+    """Smart Matches (matchType=2) or Record Matches (matchType=1) session — largest
+    families first, or closest relatives first when sort_by="relationship"."""
     summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
+    kind = "Smart" if match_type == 2 else "Record"
 
-    logger.info(f"Loading Smart Matches by-people list (sorted by {sort_by})…")
-    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds, sort_by=sort_by)
+    logger.info(f"Loading {kind} Matches by-people list (sorted by {sort_by})…")
+    people = await get_people_sorted_by_count(page, match_type=match_type, scroll_rounds=scroll_rounds, sort_by=sort_by)
     logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
     known_conflicts = _recent_conflict_urls()
@@ -1125,7 +1127,7 @@ async def run_smart_matches_session(
         # goto timeout on a person's page crashed it). Skip that person; give up only
         # after 5 failures in a row, which looks like a real outage rather than a blip.
         try:
-            match_urls = await get_person_match_urls(page, person["id"], match_type=2)
+            match_urls = await get_person_match_urls(page, person["id"], match_type=match_type)
             list_failures = 0
         except Exception as e:  # noqa: BLE001
             list_failures += 1
@@ -1140,7 +1142,7 @@ async def run_smart_matches_session(
         pending = len(match_urls)
         match_urls = [u for u in match_urls if u not in known_conflicts]
         summary["known_conflict_skipped"] = summary.get("known_conflict_skipped", 0) + pending - len(match_urls)
-        logger.info(f"  {pending} pending Smart Matches ({pending - len(match_urls)} known conflicts skipped)")
+        logger.info(f"  {pending} pending {kind} Matches ({pending - len(match_urls)} known conflicts skipped)")
         if not match_urls:
             await _sleep(1, 2)
             continue

@@ -1,9 +1,13 @@
 #!/bin/bash
-# Standing runner for `main.py --smart-only --sort-by-relationship`.
+# Standing runner for `main.py --smart-only|--record-only --sort-by-relationship`.
 # Started at login by launchd (scripts/com.walklikeaman.myheritage-runner.plist);
-# see wiki/log.md 2026-10-12. Runs --visible: headless is blocked by the WAF.
+# see wiki/log.md 2026-10-12. Runs --background (new headless Chromium, passes the WAF).
+# Every RECORD_EVERY-th session works Record Matches instead of Smart Matches
+# (per Nikita 2026-10-12: both kinds in the background loop).
 cd "$(dirname "$0")/.." || exit 1
 MAX_MATCHES=100
+RECORD_EVERY=3
+SESSION=0
 
 rand_pause() {
     TIER=$(( RANDOM % 20 ))
@@ -17,16 +21,25 @@ rand_pause() {
 mkdir -p logs
 
 while true; do
-    LOG="logs/session_smart_$(date +%Y%m%d_%H%M%S).log"
+    SESSION=$(( SESSION + 1 ))
+    if [ $(( SESSION % RECORD_EVERY )) -eq 0 ]; then
+        MODE="--record-only"; KIND=record
+    else
+        MODE="--smart-only"; KIND=smart
+    fi
+    LOG="logs/session_${KIND}_$(date +%Y%m%d_%H%M%S).log"
 
     # A reboot or OS reset can wipe ~/Library/Caches/ms-playwright (2026-09-22),
     # and a playwright upgrade can need a newer build. Idempotent; no-op when current.
     python3 -m playwright install chromium >> "$LOG" 2>&1 || true
 
-    caffeinate -is python3 main.py --smart-only --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose >> "$LOG" 2>&1
+    caffeinate -is python3 main.py "$MODE" --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose >> "$LOG" 2>&1
     EXIT=$?
 
-    python3 notify_vip.py >> "$LOG" 2>&1
+    # Notifies (macOS) only on NEW VIP hits; conflict_review.py rebuilds the manual
+    # review queue in data/conflict_review.md.
+    python3 notify_vip.py --notify >> "$LOG" 2>&1
+    python3 conflict_review.py >> "$LOG" 2>&1
 
     if grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
         PAUSE=21600

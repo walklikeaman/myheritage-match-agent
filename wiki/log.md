@@ -4,6 +4,27 @@
 
 ---
 
+## [2026-10-12] update | Record Matches in the loop, VIP alert on new hits only, conflict review queue
+
+**Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`, `notify_vip.py`, `conflict_review.py`
+**Scenario**: feature (per Nikita 2026-10-12: "оба пункта", notify only when there are finds, conflicts still need review)
+**Outcome**: ✅ shipped, runner restarted on the Mac
+
+**What changed**:
+- Every 3rd runner session is `--record-only`. Record Matches now run through the same
+  session loop as Smart Matches (`run_smart_matches_session(match_type=1)`): full scroll,
+  known-conflict skip, navigation retry, reCAPTCHA circuit breaker. The old record loop
+  only read the first screen of people and had none of those.
+- `notify_vip.py --notify` remembers reported hits in `data/vip_seen.json` and raises a
+  macOS notification only for new ones. First run seeds silently.
+- Found while testing: the Cyrillic Рассадина pattern required "з", so Рассадина /
+  Россадина / Росадина never matched (only Latin and Разсадина did). Fixed.
+- `conflict_review.py` rebuilds `data/conflict_review.md` after every session: VIP hits
+  plus every conflict under the current rules, grouped by tree person, links to compare
+  pages, already-confirmed-but-unsaved ones marked ⚠️.
+
+---
+
 ## [2026-10-12] incident | A 30 s page timeout crashed a whole session
 
 **Object**: `run_smart_matches_session`, `get_person_match_urls`

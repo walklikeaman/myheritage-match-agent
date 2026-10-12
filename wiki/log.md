@@ -4,6 +4,23 @@
 
 ---
 
+## [2026-10-12] update | caffeinate -s, maiden-name connectors, re-extract of confirmed matches
+
+**Object**: `scripts/mh_runner_smart.sh`, `_NAME_CONNECTOR_RE`, `--extract-confirmed`
+**Scenario**: rule-change
+**Outcome**: ✅ success — re-extract running, runner re-bootstrapped after it
+
+**What happened**: Per Nikita 2026-10-12: (1) `caffeinate -is` replaces `-i`. (2) The
+connectors "geboren/geb./урожд." join "born/née" in the name check; 4 of 6 test
+pairs that conflicted before no longer do, and real mismatches still do.
+(3) `--extract-confirmed --background --max 40` runs in the runner's idle pause
+(runner booted out first, bootstrapped again after) to catch confirmed matches
+with missing relative data. First match gave 100 fields and 47 photos.
+
+**Updated**: `wiki/concepts/match-evaluation.md`, `agent-architecture.md`.
+
+---
+
 ## [2026-10-12] update | Windowless runner, full relative expansion, year check, launchd on
 
 **Object**: `main.py --background`, `browser/smart_matches.py`, `auth/browser_auth.py`, `scripts/`

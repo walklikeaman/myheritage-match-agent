@@ -219,7 +219,11 @@ _HEBREW_RE = re.compile(r"[֐-׿]")
 # Levin)" vs tree "Malka (Levin)" -- same surname, false-flagged because the
 # Spanish marker wasn't stripped) wrap a maiden name inside the parens without
 # being part of the name itself.
-_NAME_CONNECTOR_RE = re.compile(r"\b(לבית|בלבית|born|n[eé]e|nacida)\b", re.IGNORECASE)
+_NAME_CONNECTOR_RE = re.compile(
+    r"\b(?:לבית|בלבית|born|n[eé]e|nacida|geboren|geborene|урожденная|урождённая|урожд)\b\.?"
+    r"|\bgeb\.",
+    re.IGNORECASE,
+)
 
 # Honorific/relational titles that can prefix a name -- "רבי"/"rabbi"/"rav"/
 # "reb"/"ר'" = Rabbi/Mr. variants, 'הרה"ח' = an abbreviated rabbinic/chassidic

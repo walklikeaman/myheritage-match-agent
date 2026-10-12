@@ -52,7 +52,7 @@ The unattended `--smart-only --sort-by-relationship` loop is supervised by
 login / reboot ──► launchd (gui/501, Aqua session)
                      └─► scripts/mh_runner_smart.sh   (loop, lives in the repo)
                            ├─ playwright install chromium   (no-op if current)
-                           ├─ python3 main.py --smart-only ... --background
+                           ├─ python3 main.py --smart-only ... --background   (under `caffeinate -is`)
                            ├─ python3 notify_vip.py
                            └─ pause: clean 45-165min | crash 300s | WAF 6h
 ```
@@ -66,6 +66,7 @@ login / reboot ──► launchd (gui/501, Aqua session)
   (chrome-headless-shell) is still blocked. `--visible` stays as a debug mode;
   its window is parked at `_OFFSCREEN_BOUNDS` (left -20000, top 5000), which still
   leaves a ~40px sliver on a two-display Mac.
+- `caffeinate -is` (per Nikita 2026-10-12): `-s` blocks system sleep on AC power only; on battery or with the lid closed on battery the Mac can still sleep.
 - The job is still a GUI-session user agent (`LimitLoadToSessionType Aqua`).
 - Why: the old `screen` runner in `/tmp` died with every reboot (7 reboots in
   one month, one gap of ~16 days — see `wiki/log.md` 2026-10-12).

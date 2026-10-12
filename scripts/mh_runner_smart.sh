@@ -23,7 +23,7 @@ while true; do
     # and a playwright upgrade can need a newer build. Idempotent; no-op when current.
     python3 -m playwright install chromium >> "$LOG" 2>&1 || true
 
-    caffeinate -i python3 main.py --smart-only --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose >> "$LOG" 2>&1
+    caffeinate -is python3 main.py --smart-only --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose >> "$LOG" 2>&1
     EXIT=$?
 
     python3 notify_vip.py >> "$LOG" 2>&1
@@ -39,5 +39,5 @@ while true; do
         echo "[runner] clean exit -- sleeping ${PAUSE}s" >> "$LOG"
     fi
 
-    caffeinate -i sleep "$PAUSE"
+    caffeinate -is sleep "$PAUSE"
 done

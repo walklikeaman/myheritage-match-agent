@@ -144,8 +144,11 @@ different people, so `_pre_confirm_year_conflicts()` also compares birth and dea
 of every relative that exists in the tree. Gap > 5 years on a shared fact sends the match
 to CONFLICT (never confirmed), like a name conflict. Threshold 5 because 1 year gaps
 (1814/1815) are routine. In live runs it fired once in ~30 matches, together with a name
-conflict, so it did not change the CONFLICT rate (~68-75%). The "born/geboren/урожд."
-connector tweak was NOT applied (awaiting operator).
+conflict, so it did not change the CONFLICT rate (~68-75%). Same day, per Nikita: maiden-name
+connectors "geboren", "geborene", "geb.", "урожд.", "урождённая" are now stripped like
+"born"/"née" in `_NAME_CONNECTOR_RE`, so "Anna (geboren Schmidt)" vs "Anna Schmidt"
+and "Мария (урожд. Петрова)" vs "Мария Петрова" are no longer conflicts (checked on 6
+cases; real mismatches still conflict).
 
 ## Extraction priority (when saving data)
 1. Birth date + place (high value, often missing)

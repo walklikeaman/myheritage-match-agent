@@ -713,11 +713,16 @@ async def process_one_match(
     Returns {"status": "ok"|"skip"|"error", "fields": int, "url": str}
     """
     result = {"url": match_url, "status": "error", "fields": 0}
-    lang_url = match_url if "lang=RU" in match_url else match_url + "?lang=RU"
+    if "lang=RU" in match_url:
+        lang_url = match_url
+    else:
+        lang_url = match_url + ("&" if "?" in match_url else "?") + "lang=RU"
 
     # --- Step 1: Load compare page ---
     try:
-        logger.info(f"→ {lang_url.split('match-compare/')[-1][:60]}")
+        label = lang_url.split("match-compare/")[-1] if "match-compare/" in lang_url else \
+            lang_url.split("itemId=")[-1]
+        logger.info(f"→ {label[:60]}")
         await page.goto(lang_url, wait_until="domcontentloaded", timeout=30000)
         await _sleep(4, 6)
     except Exception as e:  # noqa: BLE001 -- one bad match must not crash the whole session
@@ -929,9 +934,12 @@ async def process_one_match(
         result["status"] = "error"
         return result
 
-    # Wait for redirect back to compare page (up to 35s)
+    # Wait for redirect back to the compare page or, for a Record Match, the record viewer
     try:
-        await page.wait_for_url("**/match-compare/**#rm_*", timeout=35000)
+        await page.wait_for_url(
+            lambda u: ("match-compare/" in u and "#rm_" in u) or "action=showRecord" in u,
+            timeout=35000,
+        )
     except PWTimeoutError:
         pass  # Check text fallback below
 
@@ -992,19 +1000,29 @@ _EXTRACT_PEOPLE = """
 async def get_person_match_urls(
     page: Page, person_id: str, match_type: int = 2, match_status: int = 32,
 ) -> list[str]:
-    """Return all match-compare URLs for a person at the given status (32=pending, 8=confirmed)."""
+    """Return all match URLs for a person at the given status (32=pending, 8=confirmed).
+
+    Smart Matches link to a match-compare page. Record Matches (matchType=4) have no
+    compare page: their "Просмотреть совпадение" button opens a record viewer
+    (action=showRecord) with the same confirm button, so collect those links instead.
+    """
     url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-for-person/{person_id}"
         f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     await _sleep(4, 6)
+    selector = (
+        'a[data-automations="review_match_button"], a[href*="action=showRecord"]'
+        if match_type == 4 else 'a[href*="match-compare"]'
+    )
     return await page.evaluate("""
-        () => [...new Set(
-            [...document.querySelectorAll('a[href*="match-compare"]')]
+        (sel) => [...new Set(
+            [...document.querySelectorAll(sel)]
             .map(a => a.href)
+            .filter(h => h && !h.startsWith('javascript'))
         )]
-    """)
+    """, selector)
 
 
 _CLICK_TEXT_EXACT = """

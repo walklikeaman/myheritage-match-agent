@@ -91,6 +91,9 @@ _CLICK_EXTRACT_ALL = """
     // Single-field sign (Smart Match, 1 field)
     const s = document.querySelector('[class*="extract_record_row_copied_all_sign"]');
     if (s) {
+        // Already selected (a record wizard pre-selects everything): a click would
+        // toggle it off, so leave it.
+        if (s.className.includes('copied_all_true')) return {clicked: 'single', already: true};
         window.angular.element(s).triggerHandler('click');
         return {clicked: 'single', className: s.className};
     }
@@ -120,6 +123,12 @@ _CHECK_EXTRACT_SUCCESS = """
 """
 
 _FIELD_COUNT = "() => document.querySelectorAll('input[type=\"checkbox\"]').length"
+
+# A record wizard (Record Match, live probe 2026-10-13) has no checkboxes: each extractable
+# value is an editable row, and the source citation is pre-selected. Count the rows instead.
+_RECORD_FIELD_COUNT = """
+() => document.querySelectorAll('[ng-click^="enterEditMode"]').length
+"""
 
 _IS_CONFIRMED = "() => document.body.innerText.includes('подтверждено')"
 
@@ -700,7 +709,10 @@ _FIND_MANUAL_EXTRACT_LINK = """
 () => {
     const a = [...document.querySelectorAll('a')]
         .find(el => el.textContent.includes('Извлечь информацию вручную'));
-    return a ? a.href : null;
+    if (a) return a.href;
+    // Record viewer (Record Match): "Извлечь информацию в своё дерево" (a.extract_record)
+    const r = [...document.querySelectorAll('a[href*="showExtractWizard"]')][0];
+    return r ? r.href : null;
 }
 """
 
@@ -713,6 +725,7 @@ async def process_one_match(
     Returns {"status": "ok"|"skip"|"error", "fields": int, "url": str}
     """
     result = {"url": match_url, "status": "error", "fields": 0}
+    is_record = "action=showRecord" in match_url
     if "lang=RU" in match_url:
         lang_url = match_url
     else:
@@ -873,6 +886,8 @@ async def process_one_match(
         await _sleep(2, 3)
 
     fields = await page.evaluate(_FIELD_COUNT)
+    if is_record and fields == 0:
+        fields = await page.evaluate(_RECORD_FIELD_COUNT)
     logger.debug(f"  Fields: {fields}")
     # A populated Smart-Match wizard always yields checkboxes; 0 means it never really
     # rendered (the RM 'rm_save' path legitimately has none, so exclude it). Don't save.
@@ -905,7 +920,8 @@ async def process_one_match(
             return result
 
     # --- Step 3c: Transfer photos ---
-    photos_clicked = await page.evaluate("""
+    # Not for a record: its only "photo" is the scan of the record page itself.
+    photos_clicked = 0 if is_record else await page.evaluate("""
         () => {
             // uploadPhoto() divs on wizard = photos from the matched tree to import
             const photos = [...document.querySelectorAll('[ng-click="uploadPhoto()"]')];
@@ -952,7 +968,7 @@ async def process_one_match(
         result["fields"] = fields
         result["photos"] = photos_clicked
     else:
-        logger.warning("  Save may not have completed (no 'подтверждено' text)")
+        logger.warning(f"  Save may not have completed (no 'подтверждено' text) at {page.url[:120]}")
         result["status"] = "error"
 
     return result

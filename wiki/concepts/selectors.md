@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-09-10
-sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10]
+updated: 2026-10-13
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10, live-probe-2026-10-13]
 confidence: high
 status: active
 relates_to: [smart-matches, record-matches, data-extraction, match-evaluation]
@@ -33,6 +33,20 @@ URL: `/discovery-hub/{TREE_ID}/matches-for-person/{personId}?matchType=2&matchSt
 |---------|----------|-------|
 | Match links | `a[href*="match-compare"]` | Each href has full match ID |
 | Person info | `.innerText` of card | "НОВОЕ" prefix on new fields |
+
+### Record Matches list (live probe 2026-10-13)
+
+`matchType` is a filter, not a page: **1 = "Все совпадения"** (smart + record, 14,496 people),
+**2 = Smart Matches** (14,184 people), **4 = Record Matches** (10,213 people, 155,358 matches).
+The filter tabs "Все совпадения / Record Matches / Smart Matches" switch it. People list and
+`a[href*="matches-for-person"]` links work the same with `matchType=4`.
+
+On a record person page there is **no `match-compare` link**. The "Просмотреть совпадение"
+button (`a[data-automations="review_match_button"]`, inside `mh-dropdown-button` with
+`ng-switch-when="record_match"`) points to a record viewer:
+`/research/collection-<id>/<slug>?action=showRecord&itemId=<n>&indId=individual-<TREE>-<personId>`.
+Its confirm/extract flow is not mapped yet, so `process_one_match` can't handle Record Matches.
+`/record-matches` returns "Страница не найдена".
 
 ### Match-compare page (Smart Match)
 URL: `/discovery-hub/{TREE_ID}/match-compare/{matchId}?lang=RU`

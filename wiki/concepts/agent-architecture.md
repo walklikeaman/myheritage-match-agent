@@ -53,7 +53,7 @@ login / reboot ──► launchd (gui/501, Aqua session)
                      └─► scripts/mh_runner_smart.sh   (loop, lives in the repo)
                            ├─ playwright install chromium   (no-op if current)
                            ├─ python3 main.py --smart-only ... --background   (under `caffeinate -is`;
-                           │     every 3rd session --record-only instead)
+                           │     --record-only rotation exists but is off: RECORD_EVERY=0)
                            ├─ python3 notify_vip.py --notify   (macOS notification on NEW VIP hits only)
                            ├─ python3 conflict_review.py       (rebuilds data/conflict_review.md)
                            └─ pause: clean 45-165min | crash 300s | WAF 6h

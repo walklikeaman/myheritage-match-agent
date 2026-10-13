@@ -4,6 +4,21 @@
 
 ---
 
+## [2026-10-13] incident | Record Matches rotation turned off: records use a different page
+
+**Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`
+**Scenario**: bugfix after live check
+**Outcome**: ⚠️ rotation off until a record-viewer flow is built
+
+**What happened**: The first `--record-only` session (05:56) found the same 240 people as
+Smart and opened only tree-to-tree `match-compare` URLs (3 processed, 1 saved). Read-only
+probes showed `matchType=1` means "all matches"; Record Matches are `matchType=4`, and their
+button opens a `/research/collection-*?action=showRecord` record viewer that the current
+confirm/extract code doesn't know. Set `RECORD_EVERY=0` and `match_type=4` so record mode
+is correct but idle. Details in `wiki/concepts/selectors.md`.
+
+---
+
 ## [2026-10-12] update | Record Matches in the loop, VIP alert on new hits only, conflict review queue
 
 **Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`, `notify_vip.py`, `conflict_review.py`

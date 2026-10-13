@@ -3,10 +3,12 @@
 # Started at login by launchd (scripts/com.walklikeaman.myheritage-runner.plist);
 # see wiki/log.md 2026-10-12. Runs --background (new headless Chromium, passes the WAF).
 # Every RECORD_EVERY-th session works Record Matches instead of Smart Matches
-# (per Nikita 2026-10-12: both kinds in the background loop).
+# (per Nikita 2026-10-12: both kinds in the background loop). 0 = off.
+# Off since 2026-10-13: Record Matches open a /research/collection-* record viewer, not
+# match-compare, so process_one_match can't handle them yet (wiki/concepts/selectors.md).
 cd "$(dirname "$0")/.." || exit 1
 MAX_MATCHES=100
-RECORD_EVERY=3
+RECORD_EVERY=0
 SESSION=0
 
 rand_pause() {
@@ -22,7 +24,7 @@ mkdir -p logs
 
 while true; do
     SESSION=$(( SESSION + 1 ))
-    if [ $(( SESSION % RECORD_EVERY )) -eq 0 ]; then
+    if [ "$RECORD_EVERY" -gt 0 ] && [ $(( SESSION % RECORD_EVERY )) -eq 0 ]; then
         MODE="--record-only"; KIND=record
     else
         MODE="--smart-only"; KIND=smart

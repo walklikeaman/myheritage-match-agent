@@ -1,16 +1,12 @@
 """
 Record Match (matchType=4) automation for MyHeritage.
 
-Flow is identical to Smart Matches:
-  1. Navigate to match-compare page (matchType=4 in URL; see run_record_matches_session: records actually open a record viewer)
-  2. Click "Подтвердить совпадение" via AngularJS triggerHandler
-  3. Page auto-navigates to showExtractWizard
-  4. On wizard: click "Сохранить в дерево" (Record Match style) or
-               "Извлечь всю информацию" (family-tree style, shared wizard)
-  5. Confirm success ("подтверждено" text back on match-compare)
-
-Delegates wizard logic to process_one_match() from smart_matches — same
-wizard URL, same save flow; only difference is matchType=4 in the list URLs.
+Record Matches have no match-compare page. The "Просмотреть совпадение" button on a
+matches-for-person page opens a record viewer (action=showRecord) with the same Angular
+"Подтвердить совпадение" button; confirming leads to showExtractWizard. The record wizard
+has no checkboxes (editable rows + a pre-selected source citation) and saves via
+saveButton. process_one_match() in smart_matches handles both pages; see
+wiki/concepts/selectors.md "Record viewer + record wizard".
 """
 
 import asyncio

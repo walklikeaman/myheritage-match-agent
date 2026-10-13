@@ -4,6 +4,25 @@
 
 ---
 
+## [2026-10-13] update | Record Matches flow built, 5-record pilot saved
+
+**Object**: `browser/smart_matches.py`, `browser/record_matches.py`, `wiki/concepts/selectors.md`
+**Scenario**: feature (Nikita chose "Да, с пилотом": map the record page, confirm 5, show, then enable)
+**Outcome**: ✅ pilot 5/5 saved and re-read as confirmed; rotation still off pending Nikita's go
+
+**What changed** (commits 41a1ffe, d485cf3):
+- Record links come from `a[data-automations="review_match_button"]` (record viewer), not
+  `match-compare`. The viewer has the same Angular confirm button and leads to
+  `showExtractWizard`; Save returns to the viewer, which then says "Данное совпадение подтверждено".
+- The record wizard has no checkboxes, so the 0-field guard skipped the first two pilot records
+  after confirming them (pilot stopped at 2). Now record fields are counted as editable rows,
+  an already-on extract sign is never clicked, photo transfer is skipped for records, and an
+  already-confirmed record follows its "Извлечь информацию в своё дерево" link.
+- Pilot on Paul M D Kunstadt (5510748): the 2 half-done records were finished and 3 new ones
+  confirmed + saved, all newspaper mentions (OldNews.com), 2 fields each (name + citation).
+
+---
+
 ## [2026-10-13] incident | Record Matches rotation turned off: records use a different page
 
 **Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`

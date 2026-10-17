@@ -4,11 +4,11 @@
 # see wiki/log.md 2026-10-12. Runs --background (new headless Chromium, passes the WAF).
 # Every RECORD_EVERY-th session works Record Matches instead of Smart Matches
 # (per Nikita 2026-10-12: both kinds in the background loop). 0 = off.
-# Off since 2026-10-13: Record Matches open a /research/collection-* record viewer, not
-# match-compare, so process_one_match can't handle them yet (wiki/concepts/selectors.md).
+# Records go through the record viewer + record wizard flow (pilot 5/5, 2026-10-13);
+# Nikita picked every 3rd session on 2026-10-17 (wiki/concepts/selectors.md).
 cd "$(dirname "$0")/.." || exit 1
 MAX_MATCHES=100
-RECORD_EVERY=0
+RECORD_EVERY=3
 SESSION=0
 
 rand_pause() {

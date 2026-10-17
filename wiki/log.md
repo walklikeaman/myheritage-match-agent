@@ -4,6 +4,14 @@
 
 ---
 
+## [2026-10-17] update | Record Matches enabled in the background loop, every 3rd session
+
+**Object**: `scripts/mh_runner_smart.sh`, `wiki/concepts/agent-architecture.md`
+**Scenario**: config (Nikita chose "Каждая 3-я сессия" on the frequency card)
+**Outcome**: ✅ `RECORD_EVERY=3`: two Smart Matches sessions, then one Record Matches session, up to 100 each
+
+---
+
 ## [2026-10-13] update | Record Matches flow built, 5-record pilot saved
 
 **Object**: `browser/smart_matches.py`, `browser/record_matches.py`, `wiki/concepts/selectors.md`

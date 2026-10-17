@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-09-10
-sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10]
+updated: 2026-10-13
+sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10, live-probe-2026-10-13]
 confidence: high
 status: active
 relates_to: [smart-matches, record-matches, data-extraction, match-evaluation]
@@ -33,6 +33,40 @@ URL: `/discovery-hub/{TREE_ID}/matches-for-person/{personId}?matchType=2&matchSt
 |---------|----------|-------|
 | Match links | `a[href*="match-compare"]` | Each href has full match ID |
 | Person info | `.innerText` of card | "НОВОЕ" prefix on new fields |
+
+### Record Matches list (live probe 2026-10-13)
+
+`matchType` is a filter, not a page: **1 = "Все совпадения"** (smart + record, 14,496 people),
+**2 = Smart Matches** (14,184 people), **4 = Record Matches** (10,213 people, 155,358 matches).
+The filter tabs "Все совпадения / Record Matches / Smart Matches" switch it. People list and
+`a[href*="matches-for-person"]` links work the same with `matchType=4`.
+
+On a record person page there is **no `match-compare` link**. The "Просмотреть совпадение"
+button (`a[data-automations="review_match_button"]`, inside `mh-dropdown-button` with
+`ng-switch-when="record_match"`) points to a record viewer:
+`/research/collection-<id>/<slug>?action=showRecord&itemId=<n>&indId=individual-<TREE>-<personId>`.
+`/record-matches` returns "Страница не найдена".
+
+### Record viewer + record wizard (live probe + pilot 2026-10-13)
+
+The record viewer (`action=showRecord`) uses the same Angular controls as a compare page, so
+`process_one_match` handles it when given the viewer URL:
+
+| Element | Selector | Notes |
+|---------|----------|-------|
+| Confirm | `a[data-automations="real_confirm_extract_button"]`, ng-click `vm.invokeAction(vm.actionButtons[0].action, $event)`, text `Подтвердить совпадение` | Leads to `showExtractWizard` |
+| Save text only | `[data-automations="save_to_tree_button"]` "Сохранить в Вашем дереве" | Not used |
+| Extract link | `a.extract_record` "Извлечь информацию в своё дерево", href `action=showExtractWizard` | Used for already-confirmed records |
+| Reject | ng-click `vm.reject()` "отклоните его" | NEVER call |
+| Confirmed marker | body text `Данное совпадение подтверждено.` + `Отменить подтверждение` | `_IS_CONFIRMED` matches it |
+
+The record wizard differs from the tree wizard: **no checkboxes**. Each value is an editable
+row (`ng-click="enterEditMode();"`), the source citation is a toggle
+(`copySourceCitation = !copySourceCitation`), and a hidden `extract_record_row_copied_all_sign`
+turns on with one click. Save is `id="saveButton"` (`saveAndNavigateTo(true)`), which returns to
+the record viewer. The only `uploadPhoto()` target is the record scan, so photo transfer is
+skipped for records. Records from a family-tree collection (for example Geni) show the tree
+style "Извлечь всю информацию" wizard instead.
 
 ### Match-compare page (Smart Match)
 URL: `/discovery-hub/{TREE_ID}/match-compare/{matchId}?lang=RU`

@@ -91,6 +91,9 @@ _CLICK_EXTRACT_ALL = """
     // Single-field sign (Smart Match, 1 field)
     const s = document.querySelector('[class*="extract_record_row_copied_all_sign"]');
     if (s) {
+        // Already selected (a record wizard pre-selects everything): a click would
+        // toggle it off, so leave it.
+        if (s.className.includes('copied_all_true')) return {clicked: 'single', already: true};
         window.angular.element(s).triggerHandler('click');
         return {clicked: 'single', className: s.className};
     }
@@ -120,6 +123,12 @@ _CHECK_EXTRACT_SUCCESS = """
 """
 
 _FIELD_COUNT = "() => document.querySelectorAll('input[type=\"checkbox\"]').length"
+
+# A record wizard (Record Match, live probe 2026-10-13) has no checkboxes: each extractable
+# value is an editable row, and the source citation is pre-selected. Count the rows instead.
+_RECORD_FIELD_COUNT = """
+() => document.querySelectorAll('[ng-click^="enterEditMode"]').length
+"""
 
 _IS_CONFIRMED = "() => document.body.innerText.includes('подтверждено')"
 
@@ -700,7 +709,10 @@ _FIND_MANUAL_EXTRACT_LINK = """
 () => {
     const a = [...document.querySelectorAll('a')]
         .find(el => el.textContent.includes('Извлечь информацию вручную'));
-    return a ? a.href : null;
+    if (a) return a.href;
+    // Record viewer (Record Match): "Извлечь информацию в своё дерево" (a.extract_record)
+    const r = [...document.querySelectorAll('a[href*="showExtractWizard"]')][0];
+    return r ? r.href : null;
 }
 """
 
@@ -713,11 +725,17 @@ async def process_one_match(
     Returns {"status": "ok"|"skip"|"error", "fields": int, "url": str}
     """
     result = {"url": match_url, "status": "error", "fields": 0}
-    lang_url = match_url if "lang=RU" in match_url else match_url + "?lang=RU"
+    is_record = "action=showRecord" in match_url
+    if "lang=RU" in match_url:
+        lang_url = match_url
+    else:
+        lang_url = match_url + ("&" if "?" in match_url else "?") + "lang=RU"
 
     # --- Step 1: Load compare page ---
     try:
-        logger.info(f"→ {lang_url.split('match-compare/')[-1][:60]}")
+        label = lang_url.split("match-compare/")[-1] if "match-compare/" in lang_url else \
+            lang_url.split("itemId=")[-1]
+        logger.info(f"→ {label[:60]}")
         await page.goto(lang_url, wait_until="domcontentloaded", timeout=30000)
         await _sleep(4, 6)
     except Exception as e:  # noqa: BLE001 -- one bad match must not crash the whole session
@@ -868,6 +886,8 @@ async def process_one_match(
         await _sleep(2, 3)
 
     fields = await page.evaluate(_FIELD_COUNT)
+    if is_record and fields == 0:
+        fields = await page.evaluate(_RECORD_FIELD_COUNT)
     logger.debug(f"  Fields: {fields}")
     # A populated Smart-Match wizard always yields checkboxes; 0 means it never really
     # rendered (the RM 'rm_save' path legitimately has none, so exclude it). Don't save.
@@ -900,7 +920,8 @@ async def process_one_match(
             return result
 
     # --- Step 3c: Transfer photos ---
-    photos_clicked = await page.evaluate("""
+    # Not for a record: its only "photo" is the scan of the record page itself.
+    photos_clicked = 0 if is_record else await page.evaluate("""
         () => {
             // uploadPhoto() divs on wizard = photos from the matched tree to import
             const photos = [...document.querySelectorAll('[ng-click="uploadPhoto()"]')];
@@ -929,9 +950,12 @@ async def process_one_match(
         result["status"] = "error"
         return result
 
-    # Wait for redirect back to compare page (up to 35s)
+    # Wait for redirect back to the compare page or, for a Record Match, the record viewer
     try:
-        await page.wait_for_url("**/match-compare/**#rm_*", timeout=35000)
+        await page.wait_for_url(
+            lambda u: ("match-compare/" in u and "#rm_" in u) or "action=showRecord" in u,
+            timeout=35000,
+        )
     except PWTimeoutError:
         pass  # Check text fallback below
 
@@ -944,7 +968,7 @@ async def process_one_match(
         result["fields"] = fields
         result["photos"] = photos_clicked
     else:
-        logger.warning("  Save may not have completed (no 'подтверждено' text)")
+        logger.warning(f"  Save may not have completed (no 'подтверждено' text) at {page.url[:120]}")
         result["status"] = "error"
 
     return result
@@ -992,19 +1016,29 @@ _EXTRACT_PEOPLE = """
 async def get_person_match_urls(
     page: Page, person_id: str, match_type: int = 2, match_status: int = 32,
 ) -> list[str]:
-    """Return all match-compare URLs for a person at the given status (32=pending, 8=confirmed)."""
+    """Return all match URLs for a person at the given status (32=pending, 8=confirmed).
+
+    Smart Matches link to a match-compare page. Record Matches (matchType=4) have no
+    compare page: their "Просмотреть совпадение" button opens a record viewer
+    (action=showRecord) with the same confirm button, so collect those links instead.
+    """
     url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-for-person/{person_id}"
         f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     await _sleep(4, 6)
+    selector = (
+        'a[data-automations="review_match_button"], a[href*="action=showRecord"]'
+        if match_type == 4 else 'a[href*="match-compare"]'
+    )
     return await page.evaluate("""
-        () => [...new Set(
-            [...document.querySelectorAll('a[href*="match-compare"]')]
+        (sel) => [...new Set(
+            [...document.querySelectorAll(sel)]
             .map(a => a.href)
+            .filter(h => h && !h.startsWith('javascript'))
         )]
-    """)
+    """, selector)
 
 
 _CLICK_TEXT_EXACT = """
@@ -1102,13 +1136,15 @@ async def run_smart_matches_session(
     scroll_rounds: int = 8,
     wait_for_captcha: bool = False,
     sort_by: str = "count",
+    match_type: int = 2,
 ) -> dict:
-    """Smart Matches (matchType=2) session — largest families first, or closest relatives
-    first when sort_by="relationship"."""
+    """Smart Matches (matchType=2) or Record Matches (matchType=1) session — largest
+    families first, or closest relatives first when sort_by="relationship"."""
     summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
+    kind = "Smart" if match_type == 2 else "Record"
 
-    logger.info(f"Loading Smart Matches by-people list (sorted by {sort_by})…")
-    people = await get_people_sorted_by_count(page, match_type=2, scroll_rounds=scroll_rounds, sort_by=sort_by)
+    logger.info(f"Loading {kind} Matches by-people list (sorted by {sort_by})…")
+    people = await get_people_sorted_by_count(page, match_type=match_type, scroll_rounds=scroll_rounds, sort_by=sort_by)
     logger.info(f"Found {len(people)} people | top: {people[0]['name']} ({people[0]['count']} matches)" if people else "Found 0 people")
 
     known_conflicts = _recent_conflict_urls()
@@ -1125,7 +1161,7 @@ async def run_smart_matches_session(
         # goto timeout on a person's page crashed it). Skip that person; give up only
         # after 5 failures in a row, which looks like a real outage rather than a blip.
         try:
-            match_urls = await get_person_match_urls(page, person["id"], match_type=2)
+            match_urls = await get_person_match_urls(page, person["id"], match_type=match_type)
             list_failures = 0
         except Exception as e:  # noqa: BLE001
             list_failures += 1
@@ -1140,7 +1176,7 @@ async def run_smart_matches_session(
         pending = len(match_urls)
         match_urls = [u for u in match_urls if u not in known_conflicts]
         summary["known_conflict_skipped"] = summary.get("known_conflict_skipped", 0) + pending - len(match_urls)
-        logger.info(f"  {pending} pending Smart Matches ({pending - len(match_urls)} known conflicts skipped)")
+        logger.info(f"  {pending} pending {kind} Matches ({pending - len(match_urls)} known conflicts skipped)")
         if not match_urls:
             await _sleep(1, 2)
             continue

@@ -72,7 +72,7 @@ YAML frontmatter: `type / created / updated / sources` (required) + `confidence 
 - **Language: follow the source** — RU/EN both fine in wiki.
 
 ## VIP ancestor alert (auto-notify)
-If any confirmed match contains a **direct paternal/maternal ancestor** — send a PushNotification immediately and log the finding in `wiki/log.md`. Run `python3 notify_vip.py` after every session to check. Exit code 1 = hit found. Do NOT notify for collateral relatives — only direct line.
+If any confirmed match contains a **direct paternal/maternal ancestor** — send a PushNotification immediately and log the finding in `wiki/log.md`. Run `python3 notify_vip.py` after every session to check (the runner does, with `--notify`). Exit code 1 = new hit found; already-reported hits live in `data/vip_seen.json`. Conflicts and VIP hits for manual review: `data/conflict_review.md` (`python3 conflict_review.py`). Do NOT notify for collateral relatives — only direct line.
 
 VIP surnames (all variants tracked in `notify_vip.py`):
 - **Ганущинер / Ганнущинер** (1 или 2 Н — оба варианта) — variants: Ганушинер, Ganushchiner, Gannushchiner, Hanushchiner, גאנושינר

@@ -4,6 +4,20 @@
 
 ---
 
+## [2026-10-18] incident | hCaptcha on the matches list: runner crash-looped for 1.5 days
+
+**Object**: `browser/smart_matches.py`, `wiki/concepts/selectors.md`
+**Scenario**: bugfix after the first record-session check found 0 work since 2026-10-16 20:11
+**Outcome**: ⚠️ detector fixed, runner now backs off 6 h; the block itself needs the pause or a fresh login
+
+- Every session timed out loading the list: MyHeritage redirects it to a family-site page with
+  an hCaptcha (third WAF variant, see [selectors](concepts/selectors.md)).
+- Not caused by the 2026-10-17 rotation change: failures started a day earlier.
+- The runner treated it as a crash (5 min retry, 395 sessions). Now it logs `(captcha)` and
+  takes the 6 h pause.
+
+---
+
 ## [2026-10-17] update | Record Matches enabled in the background loop, every 3rd session
 
 **Object**: `scripts/mh_runner_smart.sh`, `wiki/concepts/agent-architecture.md`

@@ -597,6 +597,7 @@ _IS_BOT_CHALLENGE = """
 () => {
     if (document.querySelector('iframe[src*="recaptcha-challenge.php"]')) return true;
     if (document.querySelector('iframe[src*="_Incapsula_Resource"]')) return true;
+    if (document.querySelector('iframe[src*="hcaptcha.com"], script[src*="hcaptcha.com"]')) return true;
     const body = document.body.innerText || '';
     return body.length < 3000 &&
         /Вы\\s*-?\\s*робот|докажите, что Вы человек|prove you are human|that you are human/i.test(body);
@@ -1074,7 +1075,15 @@ async def get_people_sorted_by_count(
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
         f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
-    await page.goto(list_url, wait_until="networkidle", timeout=45000)
+    try:
+        await page.goto(list_url, wait_until="networkidle", timeout=45000)
+    except PWTimeoutError:
+        # Live 2026-10-16..18: the list redirected to a /family-sites/ page holding an
+        # hCaptcha, networkidle never came, and the runner crash-looped every 5 min.
+        if "discovery-hub" not in page.url or await page.evaluate(_IS_BOT_CHALLENGE):
+            logger.error(f"Bot challenge instead of the matches list (captcha): {page.url}")
+            return []
+        raise
     await _sleep(5, 7)
 
     if sort_by == "relationship":

@@ -192,6 +192,18 @@ be treated as a probable **third undetected challenge variant** — probe live w
 unconfirmed match, dump `iframe` src list + body length + HTML length, and extend
 `_IS_BOT_CHALLENGE` rather than assuming it's a render race or a stale-list issue.
 
+### Third variant: hCaptcha on the matches list — 2026-10-18
+
+From 2026-10-16 20:11 every session died on `page.goto(matches-by-people, networkidle)` after
+45 s. Live probe: the list URL redirects to `/family-sites/nakonechnyi/<site>?popup=4,...`,
+title and body stay empty, and the only open request is an `newassets.hcaptcha.com` blob.
+The runner saw a plain crash (exit 1), so it retried every 5 min for ~1.5 days (395 sessions)
+instead of taking the 6 h WAF pause. Fix: `_IS_BOT_CHALLENGE` also matches
+`iframe/script[src*="hcaptcha.com"]`, and `get_people_sorted_by_count` turns a list timeout
+that left `discovery-hub` (or shows a challenge) into a `(captcha)` log line and an empty
+list, so the runner backs off. A fresh login (`main.py --capture-session`) clears it if the
+pause does not.
+
 **Relatives expander (2026-10-12):** `Извлечь информацию еще об N родственниках` is a
 toggle that stays in the DOM after a click. `_CLICK_MORE_RELATIVES` clicks each one
 once, marking the element and its descendants with `data-mh-expanded` (a wrapper and a

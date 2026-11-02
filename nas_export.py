@@ -45,7 +45,7 @@ def nfc(s: str) -> str:
 
 
 def field(text: str, name: str) -> str:
-    m = re.search(rf'^{name}: "?([^"\n]*)"?$', text, re.M)
+    m = re.search(rf'^{name}: "?([^"\n]*)"?$', text, re.MULTILINE)
     return m.group(1).strip() if m else ""
 
 
@@ -54,7 +54,7 @@ def parse_page(path: Path) -> dict | None:
     gid = field(text, "gedcom_id")
     if not gid:
         return None
-    label = re.search(r"^> (.+)$", text, re.M)
+    label = re.search(r"^> (.+)$", text, re.MULTILINE)
     parents, spouses, children = [], [], []
     section = None
     for line in text.splitlines():
@@ -88,7 +88,7 @@ def ssh(cmd: str, stdin: bytes | None = None, timeout: int = 300) -> subprocess.
     for addr in NAS_ADDRS:
         last = subprocess.run(
             ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", f"HostName={addr}", NAS_HOST, cmd],
-            input=stdin, capture_output=True, timeout=timeout)
+            input=stdin, capture_output=True, timeout=timeout, check=False)
         if last.returncode != 255:      # 255 = could not connect; anything else came from the NAS
             return last
     return last

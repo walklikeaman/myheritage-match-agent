@@ -4,6 +4,12 @@
 
 ---
 
+## [2026-11-02] feature | Graph published to the NAS; runner keeps it fresh
+
+**Object**: `nas_export.py` (new), `scripts/mh_runner_smart.sh`
+**Scenario**: Nikita asked that the family graph live on OzzyNAS next to the document archive, and that this project update it by itself.
+**Outcome**: ✅ `nas_export.py` writes `Archive/Родословная/граф/` (persons.json, family_graph.json, people/*.md, README) and `Archive/Документы/Родственники/_index.json`. Document folders there are named exactly like the `wiki/people` pages, so page ↔ documents share one key. The runner now runs `graph_accumulate.py` + `nas_export.py` after every session (takes effect on the next runner start; the running loop keeps the old script). First publish: 193 persons, 24 relatives with documents. graph_accumulate brought harvested people to 27 996 (+7 656).
+
 ## [2026-10-18] incident | hCaptcha on the matches list: runner crash-looped for 1.5 days
 
 **Object**: `browser/smart_matches.py`, `wiki/concepts/selectors.md`

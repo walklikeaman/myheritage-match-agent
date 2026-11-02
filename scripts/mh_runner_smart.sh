@@ -42,6 +42,10 @@ while true; do
     # review queue in data/conflict_review.md.
     python3 notify_vip.py --notify >> "$LOG" 2>&1
     python3 conflict_review.py >> "$LOG" 2>&1
+    # Fold captured relatives into data/family_graph.json, then publish the graph and the
+    # person index to the NAS (Archive/Родословная/граф), see nas_export.py.
+    python3 graph_accumulate.py >> "$LOG" 2>&1
+    python3 nas_export.py >> "$LOG" 2>&1 || echo "[runner] NAS export failed (NAS offline?)" >> "$LOG"
 
     if grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
         PAUSE=21600

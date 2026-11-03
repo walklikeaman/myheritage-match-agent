@@ -4,6 +4,14 @@
 
 ---
 
+## [2026-11-03] incident | hCaptcha streak cleared by a fresh login on the Mac Mini
+
+**Object**: `data/myheritage_session.json`, launchd `com.walklikeaman.myheritage-runner`
+**Scenario**: Since 2026-10-22 almost every session hit the hCaptcha on the matches list; 6 h pauses did not clear it (0 saves in 10 days). Runner now lives on the Mac Mini; the MacBook runner was unloaded by Nikita.
+**Outcome**: ✅ Nikita ran `main.py --capture-session` on the Mac Mini (2026-11-03 02:13). Runner restarted with `launchctl kickstart -k`. First session loaded 80 people, no captcha, 5 confirms in the first 7 minutes, conflicts skipped as designed. The restart also picked up the `nas_export.py` step.
+
+---
+
 ## [2026-11-02] feature | Graph published to the NAS; runner keeps it fresh
 
 **Object**: `nas_export.py` (new), `scripts/mh_runner_smart.sh`

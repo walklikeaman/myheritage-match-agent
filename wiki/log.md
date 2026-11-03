@@ -4,6 +4,97 @@
 
 ---
 
+## [2026-11-03] incident | hCaptcha streak cleared by a fresh login on the Mac Mini
+
+**Object**: `data/myheritage_session.json`, launchd `com.walklikeaman.myheritage-runner`
+**Scenario**: Since 2026-10-22 almost every session hit the hCaptcha on the matches list; 6 h pauses did not clear it (0 saves in 10 days). Runner now lives on the Mac Mini; the MacBook runner was unloaded by Nikita.
+**Outcome**: ✅ Nikita ran `main.py --capture-session` on the Mac Mini (2026-11-03 02:13). Runner restarted with `launchctl kickstart -k`. First session loaded 80 people, no captcha, 5 confirms in the first 7 minutes, conflicts skipped as designed. The restart also picked up the `nas_export.py` step.
+
+---
+
+## [2026-11-02] feature | Graph published to the NAS; runner keeps it fresh
+
+**Object**: `nas_export.py` (new), `scripts/mh_runner_smart.sh`
+**Scenario**: Nikita asked that the family graph live on OzzyNAS next to the document archive, and that this project update it by itself.
+**Outcome**: ✅ `nas_export.py` writes `Archive/Родословная/граф/` (persons.json, family_graph.json, people/*.md, README) and `Archive/Документы/Родственники/_index.json`. Document folders there are named exactly like the `wiki/people` pages, so page ↔ documents share one key. The runner now runs `graph_accumulate.py` + `nas_export.py` after every session (takes effect on the next runner start; the running loop keeps the old script). First publish: 193 persons, 24 relatives with documents. graph_accumulate brought harvested people to 27 996 (+7 656).
+
+## [2026-10-18] incident | hCaptcha on the matches list: runner crash-looped for 1.5 days
+
+**Object**: `browser/smart_matches.py`, `wiki/concepts/selectors.md`
+**Scenario**: bugfix after the first record-session check found 0 work since 2026-10-16 20:11
+**Outcome**: ⚠️ detector fixed, runner now backs off 6 h; the block itself needs the pause or a fresh login
+
+- Every session timed out loading the list: MyHeritage redirects it to a family-site page with
+  an hCaptcha (third WAF variant, see [selectors](concepts/selectors.md)).
+- Not caused by the 2026-10-17 rotation change: failures started a day earlier.
+- The runner treated it as a crash (5 min retry, 395 sessions). Now it logs `(captcha)` and
+  takes the 6 h pause.
+
+---
+
+## [2026-10-17] update | Record Matches enabled in the background loop, every 3rd session
+
+**Object**: `scripts/mh_runner_smart.sh`, `wiki/concepts/agent-architecture.md`
+**Scenario**: config (Nikita chose "Каждая 3-я сессия" on the frequency card)
+**Outcome**: ✅ `RECORD_EVERY=3`: two Smart Matches sessions, then one Record Matches session, up to 100 each
+
+---
+
+## [2026-10-13] update | Record Matches flow built, 5-record pilot saved
+
+**Object**: `browser/smart_matches.py`, `browser/record_matches.py`, `wiki/concepts/selectors.md`
+**Scenario**: feature (Nikita chose "Да, с пилотом": map the record page, confirm 5, show, then enable)
+**Outcome**: ✅ pilot 5/5 saved and re-read as confirmed; rotation still off pending Nikita's go
+
+**What changed** (commits 41a1ffe, d485cf3):
+- Record links come from `a[data-automations="review_match_button"]` (record viewer), not
+  `match-compare`. The viewer has the same Angular confirm button and leads to
+  `showExtractWizard`; Save returns to the viewer, which then says "Данное совпадение подтверждено".
+- The record wizard has no checkboxes, so the 0-field guard skipped the first two pilot records
+  after confirming them (pilot stopped at 2). Now record fields are counted as editable rows,
+  an already-on extract sign is never clicked, photo transfer is skipped for records, and an
+  already-confirmed record follows its "Извлечь информацию в своё дерево" link.
+- Pilot on Paul M D Kunstadt (5510748): the 2 half-done records were finished and 3 new ones
+  confirmed + saved, all newspaper mentions (OldNews.com), 2 fields each (name + citation).
+
+---
+
+## [2026-10-13] incident | Record Matches rotation turned off: records use a different page
+
+**Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`
+**Scenario**: bugfix after live check
+**Outcome**: ⚠️ rotation off until a record-viewer flow is built
+
+**What happened**: The first `--record-only` session (05:56) found the same 240 people as
+Smart and opened only tree-to-tree `match-compare` URLs (3 processed, 1 saved). Read-only
+probes showed `matchType=1` means "all matches"; Record Matches are `matchType=4`, and their
+button opens a `/research/collection-*?action=showRecord` record viewer that the current
+confirm/extract code doesn't know. Set `RECORD_EVERY=0` and `match_type=4` so record mode
+is correct but idle. Details in `wiki/concepts/selectors.md`.
+
+---
+
+## [2026-10-12] update | Record Matches in the loop, VIP alert on new hits only, conflict review queue
+
+**Object**: `scripts/mh_runner_smart.sh`, `browser/record_matches.py`, `notify_vip.py`, `conflict_review.py`
+**Scenario**: feature (per Nikita 2026-10-12: "оба пункта", notify only when there are finds, conflicts still need review)
+**Outcome**: ✅ shipped, runner restarted on the Mac
+
+**What changed**:
+- Every 3rd runner session is `--record-only`. Record Matches now run through the same
+  session loop as Smart Matches (`run_smart_matches_session(match_type=1)`): full scroll,
+  known-conflict skip, navigation retry, reCAPTCHA circuit breaker. The old record loop
+  only read the first screen of people and had none of those.
+- `notify_vip.py --notify` remembers reported hits in `data/vip_seen.json` and raises a
+  macOS notification only for new ones. First run seeds silently.
+- Found while testing: the Cyrillic Рассадина pattern required "з", so Рассадина /
+  Россадина / Росадина never matched (only Latin and Разсадина did). Fixed.
+- `conflict_review.py` rebuilds `data/conflict_review.md` after every session: VIP hits
+  plus every conflict under the current rules, grouped by tree person, links to compare
+  pages, already-confirmed-but-unsaved ones marked ⚠️.
+
+---
+
 ## [2026-10-12] incident | A 30 s page timeout crashed a whole session
 
 **Object**: `run_smart_matches_session`, `get_person_match_urls`

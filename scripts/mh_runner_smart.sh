@@ -41,6 +41,9 @@ while true; do
     # Notifies (macOS) only on NEW VIP hits; conflict_review.py rebuilds the manual
     # review queue in data/conflict_review.md.
     python3 notify_vip.py --notify >> "$LOG" 2>&1
+    # Notifies (macOS) when the login failed or a captcha blocked the session, once per
+    # problem + a daily reminder + "works again" (2026-11-09: two silent hCaptcha streaks).
+    python3 notify_health.py "$LOG" >> "$LOG" 2>&1
     python3 conflict_review.py >> "$LOG" 2>&1
     # Fold captured relatives into data/family_graph.json, then publish the graph and the
     # person index to the NAS (Archive/Родословная/граф), see nas_export.py.

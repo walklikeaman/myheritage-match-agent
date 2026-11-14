@@ -8,7 +8,7 @@
 
 **Object**: `docs/RULES.md`, `docs/agent-method.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills/mh-*`, `.claude/settings.json`, `.claude/commands/ship.md`, `.loops/`, `tests/test_wiki.py`, `.github/workflows/wiki.yml`, вики
 **Scenario**: Никита приложил набор «Схема проекта» и попросил применить всё, чего не хватает
-**Outcome**: ✅ `pytest tests/test_wiki.py` 6/6, `settings.json` валиден, ruff чистый (коммит HASH_PENDING)
+**Outcome**: ✅ `pytest tests/test_wiki.py` 6/6, `settings.json` валиден, ruff чистый (коммит b961d96)
 
 - Новое: правила с датами и причинами (`docs/RULES.md` §3), метод, указатель `AGENTS.md`, навыки `mh-knowledge-lookup` (+ `search.sh`) и `mh-harness-reflect`, `.loops/experience.md` с двумя уроками, тест вики и CI для него.
 - Слито без потерь: `CLAUDE.md` (таблица ссылок сверху, три строки правил), `/ship` (тест вики, проверка sha, draft PR, память), хуки переведены в формат `matcher + hooks`, старый был без него.

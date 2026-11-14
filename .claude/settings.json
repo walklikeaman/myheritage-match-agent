@@ -2,14 +2,26 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "echo '=== MyHeritage Agent Session ===' && echo \"Guardrails: $(grep -c '## Guardrail:' .loops/guardrails.md 2>/dev/null || echo 0) active\" && echo \"Log entries: $(grep -c '^## \\[' wiki/log.md 2>/dev/null || echo 0) total\" && git log --oneline -3 2>/dev/null || echo '(no git history yet)'"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== MyHeritage Agent Session ==='; G=$(grep -c '^## Guardrail:' .loops/guardrails.md 2>/dev/null || echo 0); L=$(grep -c '^## \\[' wiki/log.md 2>/dev/null || echo 0); echo \"[loops] .loops/guardrails.md: $G запрет(ов) действуют. Журнал: $L записей. Начни с wiki/index.md и последних записей wiki/log.md; навык mh-knowledge-lookup.\"; git log --oneline -3 2>/dev/null || echo '(no git history yet)'",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "type": "command",
-        "command": "if [ -n \"$(git status --short 2>/dev/null)\" ]; then echo '⚠️  Uncommitted changes detected — run /ship before closing.'; fi"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then U=$(git status --short | wc -l | tr -d ' '); [ \"${U:-0}\" -gt 0 ] && echo \"[loops] ⚠️ $U несохранённых файл(ов) — когда закончишь, /ship\"; R=$(git log --oneline --since='2 hours ago' | head -1); [ -n \"$R\" ] && echo \"[loops] Был коммит. Задача заняла больше одной попытки или была поправка? Навык mh-harness-reflect\"; fi; true",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-11-13] update | Проект переведён на «Схему проекта»: правила, метод, навыки mh-*, тест вики
+
+**Object**: `docs/RULES.md`, `docs/agent-method.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills/mh-*`, `.claude/settings.json`, `.claude/commands/ship.md`, `.loops/`, `tests/test_wiki.py`, `.github/workflows/wiki.yml`, вики
+**Scenario**: Никита приложил набор «Схема проекта» и попросил применить всё, чего не хватает
+**Outcome**: ✅ `pytest tests/test_wiki.py` 6/6, `settings.json` валиден, ruff чистый (коммит b961d96)
+
+- Новое: правила с датами и причинами (`docs/RULES.md` §3), метод, указатель `AGENTS.md`, навыки `mh-knowledge-lookup` (+ `search.sh`) и `mh-harness-reflect`, `.loops/experience.md` с двумя уроками, тест вики и CI для него.
+- Слито без потерь: `CLAUDE.md` (таблица ссылок сверху, три строки правил), `/ship` (тест вики, проверка sha, draft PR, память), хуки переведены в формат `matcher + hooks`, старый был без него.
+- Вики: 6 тем ([background-runner](concepts/background-runner.md), [captcha-and-waf](concepts/captcha-and-waf.md), [conflict-review](concepts/conflict-review.md), [vip-alerts](concepts/vip-alerts.md), [nas-graph-export](concepts/nas-graph-export.md), [agent-framework](concepts/agent-framework.md)), 3 источника, индекс и обзор обновлены, устаревший статус перенесён в «Заменено».
+- Lint: запрет «Max 200» поправлен на 500 (как в `CLAUDE.md`); три битые ссылки `../../` в старых записях журнала исправлены; добавлены 2 запрета по повторившимся сбоям (раннер в `/tmp`, капча). Graphify пропущен: не установлен.
+
+---
+
 ## [2026-11-03] incident | hCaptcha streak cleared by a fresh login on the Mac Mini
 
 **Object**: `data/myheritage_session.json`, launchd `com.walklikeaman.myheritage-runner`
@@ -1766,7 +1779,7 @@ See [session-economics](concepts/session-economics.md) → "Fixed (2026-07-08)".
 **Outcome**: ✅ fix works end-to-end; account currently WAF-flagged; runner self-throttling
 
 **What happened**: Restarted the runner (screen `3133`) from `main` (fix 710af0f). First
-session ([session_auto_20260627_014440](../../logs/)): 3 matches saved cleanly (73 / 57 /
+session ([session_auto_20260627_014440](../logs/)): 3 matches saved cleanly (73 / 57 /
 40 fields), then match 4 hit a reCAPTCHA challenge → status `blocked` → session aborted
 after 4 matches with a `captcha` token. The runner's backoff grep caught it → now in ~2h
 backoff. This confirms two things: (a) the fix behaves exactly as designed in production,
@@ -1801,7 +1814,7 @@ the data-loss path the prior entry suspected: Confirm fires *before* the wizard 
 so a challenged match is left **confirmed-but-unenriched** (~75% of a plateaued session).
 
 **Action**: With operator approval (circuit-breaker, keep pacing), implemented in
-[smart_matches.py](../../browser/smart_matches.py): poll for the wizard
+[smart_matches.py](../browser/smart_matches.py): poll for the wizard
 (`_await_wizard_ready`) classifying render as control/challenge/empty; detect the challenge
 (`_IS_BOT_CHALLENGE`) → status `blocked`; on first `blocked` **abort the session** and log a
 `captcha` token so the runner's existing 2h backoff fires; `skip` (not `error`) for an empty
@@ -1836,7 +1849,7 @@ MAX=300 runs. This points to a genuine MyHeritage wizard DOM change rolling out 
 calendar time, not a session-length effect.
 
 Worse, confirmed the data-quality impact: in `process_one_match`
-([smart_matches.py:156](../../browser/smart_matches.py)) the "Подтвердить совпадение"
+([smart_matches.py:156](../browser/smart_matches.py)) the "Подтвердить совпадение"
 click commits the match server-side BEFORE the extract step. So every extract error =
 a match confirmed on MyHeritage with **0 fields/photos** transferred, and once confirmed
 it leaves the pending queue (`matchStatus=32`) — our automation won't revisit it. At 14%

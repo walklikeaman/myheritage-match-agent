@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from notify_health import classify, decide
 
-T0 = datetime(2026, 11, 8, 16, 48)
+T0 = datetime(2026, 11, 8, 16, 48)  # noqa: DTZ001 (matches the naive local times notify_health uses)
 
 
 def test_classify():

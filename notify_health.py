@@ -80,7 +80,7 @@ def main() -> int:
         return 2
     text = Path(sys.argv[1]).read_text(errors="replace")
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
-    new_state, kind = decide(state, classify(text), datetime.now())
+    new_state, kind = decide(state, classify(text), datetime.now())  # noqa: DTZ005 (naive local time on purpose: the state file stores naive ISO times)
     if new_state != state:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         STATE_FILE.write_text(json.dumps(new_state, ensure_ascii=False, indent=1))

@@ -4,6 +4,14 @@
 
 ---
 
+## [2026-11-09] incident | Second silent hCaptcha streak; runner now notifies on captcha and failed login
+
+**Object**: `notify_health.py` (new), `scripts/mh_runner_smart.sh`, `scripts/com.walklikeaman.myheritage-runner.plist`
+**Scenario**: Last saves 2026-11-08 14:02 IST (record session, 96 confirms). From 2026-11-08 16:48 IST every session got the hCaptcha on the matches list (login check still passed), the runner slept 6 h each time, and only VIP hits raised notifications, so nobody knew. Nikita also changed the MyHeritage password. The old relogin command pointed at /Library/Frameworks/Python.framework 3.12, which is gone; the working interpreter is the project `.venv` (Homebrew python@3.12).
+**Outcome**: ✅ `notify_health.py` runs after each session: one macOS notification when a captcha or failed login starts, a reminder every 24 h while it lasts, one "works again" on recovery (state in data/runner_health.json). The repo copy of the plist now matches the installed one (`.venv/bin` on PATH). Relogin: `cd ~/GitHub/"My Heritage" && .venv/bin/python3 main.py --capture-session`.
+
+---
+
 ## [2026-11-03] incident | hCaptcha streak cleared by a fresh login on the Mac Mini
 
 **Object**: `data/myheritage_session.json`, launchd `com.walklikeaman.myheritage-runner`

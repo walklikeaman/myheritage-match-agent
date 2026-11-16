@@ -24,7 +24,7 @@
 - **evidence**: 2026-11-13, ветка от `main` не видела 10 коммитов и 91 строку журнала с 2026-10-12 по 2026-11-03; PR #2 по той же причине нацелен на ветку PR #1
 - **confidence**: high, проверено по `git log origin/main..HEAD` на Mac Mini
 - **component**: `docs/agent-method.md` §1 п.6
-- status: active
+- status: active (2026-11-16: PR #1–#3 слиты, раннер снова на `main`; правило «сверить ветку раннера» остаётся)
 
 ## Lesson: Длинная серия капч не проходит сама
 - **domain**: MyHeritage / раннер

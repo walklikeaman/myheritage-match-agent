@@ -39,7 +39,7 @@ EOF
 ```
 
 **Step 6 — Push**
-`git push -u origin <branch>`. If on a non-main branch, note the branch name. Base new branches on the branch the live runner uses (today: PR #1's branch), not blindly on `main`.
+`git push -u origin <branch>`. If on a non-main branch, note the branch name. Base new branches on the branch the live runner uses (since 2026-11-16: `main`).
 
 **Step 7 — Verify**
 Run `git log --oneline -3` and compare `git rev-parse HEAD` with `git ls-remote origin <branch>`: the remote sha must match.

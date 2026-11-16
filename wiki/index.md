@@ -47,7 +47,7 @@
 ## Status (2026-11-13)
 - Smart Matches + Record Matches (каждая 3-я сессия) крутятся в фоне на Mac Mini → [background-runner](concepts/background-runner.md)
 - С 2026-11-08 сессии упираются в капчу, нужен свежий вход Никиты → [captcha-and-waf](concepts/captcha-and-waf.md)
-- Открытые PR: #1 (Record Matches, VIP только новые, очередь конфликтов), #2 (уведомление о капче и неудачном входе)
+- PR #1 (Record Matches, VIP только новые, очередь конфликтов), #2 (уведомление о капче и неудачном входе) и #3 (схема проекта) слиты в `main` 2026-11-16
 
 ## Заменено
 - Статус «Phase 1/2, ждём recon и cookie export» (2026-06-23) устарел: recon сделан, селекторы в [selectors](concepts/selectors.md)

@@ -22,6 +22,14 @@ Selectors in MyHeritage UI change. The wiki page tracks verified vs. candidate s
 **Written**: 2026-06-23 (Per house rules in CLAUDE.md)
 Name mismatches, date conflicts, and relationship restructures always go to `flagged_matches` table for manual review. This protects tree integrity.
 
-## Guardrail: Max 200 matches per agent session
-**Written**: 2026-06-23 (Per briefing risk table)
-Hard cap enforced in `config.py`. Never raise it without explicit instruction from Nikita. Account safety depends on staying under human-plausible daily volumes.
+## Guardrail: Max 500 matches per agent session
+**Written**: 2026-06-23 (Per briefing risk table). **Updated**: 2026-11-13 — the ceiling was raised from 200 to 500 after 539 clean runs (`CLAUDE.md`); this line had kept the old 200.
+Hard ceiling 500; working cap is `MAX_MATCHES_PER_SESSION=100` in `config.py` (why: `wiki/concepts/session-economics.md`). Never raise either without explicit instruction from Nikita.
+
+## Guardrail: The runner lives in launchd from the repo, never in /tmp or screen
+**Written**: 2026-11-13 (repeated 7× in Sep–Oct 2026: every Mac reboot wiped the `/tmp` runner, longest gap ~16 days; see `wiki/log.md` 2026-09-08 … 2026-10-12)
+Start and stop only via `launchctl` and `scripts/com.walklikeaman.myheritage-runner.plist`. One runner per account: Mac Mini. The MacBook runner stays unloaded.
+
+## Guardrail: On captcha/WAF, pause — never retry in a loop or try to get around it
+**Written**: 2026-11-13 (repeated: crash-loop of 395 sessions 2026-10-16…19, then 10 days of captcha 2026-10-22…11-03)
+A session that sees `(captcha)` or Incapsula ends and the runner sleeps 6 h. A streak that survives several pauses needs a fresh login by Nikita (`wiki/concepts/captcha-and-waf.md`). The agent never types the password.

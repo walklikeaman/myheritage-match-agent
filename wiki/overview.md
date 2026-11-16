@@ -1,8 +1,8 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-06-23
-sources: [agent-briefing]
+updated: 2026-11-13
+sources: [agent-briefing, project-memory-2026-11]
 status: active
 ---
 
@@ -20,7 +20,16 @@ MyHeritage's [Family Graph API](entities/family-graph-api.md) is read-only for m
 - Family Graph API → read tree structure, match counts (future)
 - Playwright → everything that requires clicking
 
-## Current state (2026-06-23)
+## Состояние на 2026-11-13
+
+- Фоновый цикл работает на Mac Mini под launchd: две сессии Smart Matches, потом одна Record Matches, до 100 совпадений за сессию → [background-runner](concepts/background-runner.md).
+- С 2026-11-08 16:48 сессии упираются в hCaptcha; лечит свежий вход Никиты → [captcha-and-waf](concepts/captcha-and-waf.md).
+- Конфликты не сохраняются сами, а копятся в очереди ручной проверки → [conflict-review](concepts/conflict-review.md).
+- Уведомление на Mac только о новых VIP-находках прямой линии → [vip-alerts](concepts/vip-alerts.md).
+- Граф семьи публикуется на NAS после каждой сессии → [nas-graph-export](concepts/nas-graph-export.md).
+- Как работают агенты в проекте → [agent-framework](concepts/agent-framework.md).
+
+## Current state (2026-06-23, historical)
 
 Phase 1 complete: authentication scaffolding + recon script + SQLite storage + config.
 **Blocked on**: cookie export from Nikita → needed to run recon and identify live CSS selectors.

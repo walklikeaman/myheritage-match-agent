@@ -16,8 +16,8 @@ venv/
 # Recon artifacts (local only)
 recon/
 
-# Graphify local state (committed output is in graphify-out/)
-graphify-out/manifest.json
+# Graphify graph is derived — never committed
+graphify-out/
 
 # Claude local state (commands + skills ARE committed)
 .claude/*

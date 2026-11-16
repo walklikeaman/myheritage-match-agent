@@ -6,7 +6,8 @@ Usage:
   python main.py --smart-only        # Smart Matches only
   python main.py --smart-only --sort-by-relationship  # closest relatives first (MyHeritage's
                                       # own "Родственной связи" sort) instead of largest-families-first
-  python main.py --record-only       # Record Matches only
+  python main.py --record-only       # Record Matches only (same loop as --smart-only,
+                                      # --sort-by-relationship works here too)
   python main.py --extract-confirmed # extract data from already-confirmed Smart Matches
                                       # (e.g. matches bulk-confirmed via "Совпадения по
                                       # источнику" that never got their data pulled in)
@@ -163,7 +164,9 @@ async def run(
         elif mode == "confirm_by_source":
             summary = await run_bulk_source_confirm_session(page, max_sources=max_sources)
         else:  # record
-            summary = await run_record_matches_session(page, max_matches=max_matches)
+            summary = await run_record_matches_session(
+                page, max_matches=max_matches, scroll_rounds=scroll_rounds, sort_by=sort_by,
+            )
 
         await context.close()
 
@@ -227,7 +230,7 @@ def main() -> None:
                         help="On reCAPTCHA, pause and wait for a human to solve it in the "
                              "visible window instead of aborting (requires --visible)")
     parser.add_argument("--sort-by-relationship", action="store_true",
-                        help="For --smart-only: process closest relatives first, using "
+                        help="For --smart-only / --record-only: process closest relatives first, using "
                              "MyHeritage's own 'Родственной связи' sort, instead of the "
                              "default largest-families-first (match count) order")
     args = parser.parse_args()

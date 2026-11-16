@@ -1,37 +1,26 @@
 """
-Record Match (matchType=1) automation for MyHeritage.
+Record Match (matchType=4) automation for MyHeritage.
 
-Flow is identical to Smart Matches:
-  1. Navigate to match-compare page (matchType=1 in URL)
-  2. Click "Подтвердить совпадение" via AngularJS triggerHandler
-  3. Page auto-navigates to showExtractWizard
-  4. On wizard: click "Сохранить в дерево" (Record Match style) or
-               "Извлечь всю информацию" (family-tree style, shared wizard)
-  5. Confirm success ("подтверждено" text back on match-compare)
-
-Delegates wizard logic to process_one_match() from smart_matches — same
-wizard URL, same save flow; only difference is matchType=1 in the list URLs.
+Record Matches have no match-compare page. The "Просмотреть совпадение" button on a
+matches-for-person page opens a record viewer (action=showRecord) with the same Angular
+"Подтвердить совпадение" button; confirming leads to showExtractWizard. The record wizard
+has no checkboxes (editable rows + a pre-selected source citation) and saves via
+saveButton. process_one_match() in smart_matches handles both pages; see
+wiki/concepts/selectors.md "Record viewer + record wizard".
 """
 
 import asyncio
 import random
 
-from loguru import logger
 from playwright.async_api import Page
 
-from browser.smart_matches import process_one_match  # shared wizard logic
-from config import (
-    BASE_URL,
-    MATCH_DELAY_MAX,
-    MATCH_DELAY_MIN,
-    PERSON_DELAY_MAX,
-    PERSON_DELAY_MIN,
-)
+from browser.smart_matches import run_smart_matches_session  # shared session loop
+from config import BASE_URL
 
 TREE_ID = "OYYV6BL4NPB77IAKQQ65RX6Q4GAV5KA"
 RECORD_MATCHES_URL = (
     f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
-    "?matchType=1&matchStatus=32&lang=RU"
+    "?matchType=4&matchStatus=32&lang=RU"
 )
 
 
@@ -42,7 +31,7 @@ async def _sleep(lo: float, hi: float) -> None:
 async def get_record_match_urls(page: Page, person_id: str) -> list[str]:
     url = (
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-for-person/{person_id}"
-        "?matchType=1&matchStatus=32&lang=RU"
+        "?matchType=4&matchStatus=32&lang=RU"
     )
     await page.goto(url, wait_until="networkidle", timeout=45000)
     await _sleep(4, 6)
@@ -76,41 +65,17 @@ async def get_people_with_record_matches(page: Page) -> list[dict]:
 async def run_record_matches_session(
     page: Page,
     max_matches: int = 200,
-    start_person_index: int = 0,
+    scroll_rounds: int = 8,
+    sort_by: str = "count",
 ) -> dict:
-    summary = {"processed": 0, "ok": 0, "skip": 0, "error": 0, "people": 0}
+    """Record Matches session through the Smart Matches loop (full scroll, known-conflict
+    skip, navigation retry, reCAPTCHA breaker).
 
-    logger.info("Loading Record Matches by-people list…")
-    people = await get_people_with_record_matches(page)
-    logger.info(f"Found {len(people)} people with pending Record Matches")
-
-    for person in people[start_person_index:]:
-        if summary["processed"] >= max_matches:
-            logger.info(f"Reached session cap ({max_matches}) — stopping")
-            break
-
-        logger.info(f"\n{'='*60}\n{person['name']} (ID: {person['id']})")
-        match_urls = await get_record_match_urls(page, person["id"])
-        logger.info(f"  {len(match_urls)} pending matches")
-
-        for i, url in enumerate(match_urls):
-            if summary["processed"] >= max_matches:
-                break
-
-            result = await process_one_match(page, url)
-            status = result["status"]
-            summary["processed"] += 1
-            summary[status] = summary.get(status, 0) + 1
-
-            logger.info(
-                f"  [{i+1}/{len(match_urls)}] {status.upper()} "
-                f"({result['fields']} fields) | total: {summary['processed']}"
-            )
-
-            if i < len(match_urls) - 1:
-                await _sleep(MATCH_DELAY_MIN, MATCH_DELAY_MAX)
-
-        summary["people"] += 1
-        await _sleep(PERSON_DELAY_MIN, PERSON_DELAY_MAX)
-
-    return summary
+    Live probe 2026-10-13: matchType=1 is "Все совпадения" (smart + record), the Record
+    Matches filter is matchType=4. Its "Просмотреть совпадение" button goes to a
+    /research/collection-*/...?action=showRecord record viewer, not match-compare, so
+    get_person_match_urls finds nothing to open and this processes 0 matches until a
+    record-viewer flow exists. The runner keeps it off (RECORD_EVERY=0)."""
+    return await run_smart_matches_session(
+        page, max_matches=max_matches, scroll_rounds=scroll_rounds, sort_by=sort_by, match_type=4,
+    )

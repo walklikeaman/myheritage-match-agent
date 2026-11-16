@@ -4,6 +4,14 @@
 
 ---
 
+## [2026-11-16] update | PR #1–#3 слиты в main: ссылки на «ветку PR #1» обновлены
+
+**Object**: `CLAUDE.md`, `docs/agent-method.md`, `wiki/index.md`, `wiki/concepts/captcha-and-waf.md`, `.loops/experience.md`
+**Scenario**: Никита слил PR #1, #2 и #3; правила всё ещё велели ветвиться от ветки PR #1
+**Outcome**: ✅ правила указывают на `main`, статус в индексе обновлён; тесты зелёные
+
+---
+
 ## [2026-11-13] update | Проект переведён на «Схему проекта»: правила, метод, навыки mh-*, тест вики
 
 **Object**: `docs/RULES.md`, `docs/agent-method.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills/mh-*`, `.claude/settings.json`, `.claude/commands/ship.md`, `.loops/`, `tests/test_wiki.py`, `.github/workflows/wiki.yml`, вики

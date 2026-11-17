@@ -4,6 +4,17 @@
 
 ---
 
+## [2026-11-17] ingest | archival.name: Шмуль-Дувид Ганущинер, Черкассы, убит при отступлении деникинцев
+
+**Object**: `wiki/sources/dako-r3050-1-54-shmul-duvid-ganushchiner.md`, `wiki/sources/archival-name.md`, `wiki/assets/DAKO_R-3050-1-54_p284.jpg`, `wiki/concepts/vip-alerts.md`
+**Scenario**: Никита прислал запись archival.name `PGR-P0493-284-R7-7` (ДАКО Р-3050-1-54, арк. 162 зв., скан стр. 284) и попросил найти этого человека в дереве
+**Outcome**: ✅ Шмуль-Дувида в дереве нет (проверены `wiki/people/`, `data/family_graph.json`, `data/graph_updates.jsonl`). Гипотеза: родственник черкасской семьи Мордхи Евсеевича, возможно Дудл Мордухович (средняя / низкая уверенность). В граф и MyHeritage ничего не записано.
+
+- Попутно: похоже, в MyHeritage имена Лейба (ID 5000066) и Дудла (ID 5000103) поменялись местами после Smart Match 2026-09-07. Нужна ручная проверка Никитой.
+- archival.name автоматически не читается: robots.txt запрещает, прокси не пускает. Решение: ручной поиск по ссылкам из страницы источника.
+
+---
+
 ## [2026-11-13] update | Проект переведён на «Схему проекта»: правила, метод, навыки mh-*, тест вики
 
 **Object**: `docs/RULES.md`, `docs/agent-method.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills/mh-*`, `.claude/settings.json`, `.claude/commands/ship.md`, `.loops/`, `tests/test_wiki.py`, `.github/workflows/wiki.yml`, вики

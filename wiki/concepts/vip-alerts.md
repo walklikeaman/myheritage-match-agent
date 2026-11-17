@@ -1,7 +1,7 @@
 ---
 type: concept
 created: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-17
 sources: [project-memory-2026-11, automation-explainer-2026-10-12]
 confidence: high
 status: active
@@ -31,6 +31,7 @@ tags: [vip, notifications, ancestors]
 
 - 2026-09-07: ветка Ганущинер подтверждена в первом ручном прогоне по родству.
 - 2026-09-08: Мария Михайловна Колонова (Разсадина) подтверждена и сохранена.
+- 2026-11-17: архивная запись о Шмуль-Дувиде Ганущинере, убитом в Черкассах (ДАКО Р-3050-1-54). Боковой родственник, гипотеза, не прямой предок: [разбор](../sources/dako-r3050-1-54-shmul-duvid-ganushchiner.md). Внешний источник: [archival-name](../sources/archival-name.md).
 
 ## Грабли
 

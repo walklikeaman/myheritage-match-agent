@@ -13,6 +13,8 @@
 | [automation-explainer-2026-10-12](sources/automation-explainer-2026-10-12.md) | Объяснение для Никиты «как сейчас работает автоматизация» (частично устарело) |
 | [project-memory-2026-11](sources/project-memory-2026-11.md) | Срез памяти проекта на 2026-11-13: раннер, капчи, уведомления, конфликты |
 | [scheme-kit-2026-11-13](sources/scheme-kit-2026-11-13.md) | Набор «Схема проекта»: что взяли, что нет и почему |
+| [archival-name](sources/archival-name.md) | archival.name: именной указатель по архивным делам (погромы 1917–1938); как пользоваться, почему не автоматизируем |
+| [dako-r3050-1-54-shmul-duvid-ganushchiner](sources/dako-r3050-1-54-shmul-duvid-ganushchiner.md) | Ганущинер Шмуль-Дувид, убит в Черкассах при отступлении деникинцев; гипотеза связи с семьёй Мордхи, скан |
 
 ## Entities (services, systems, features)
 | Slug | What it is |

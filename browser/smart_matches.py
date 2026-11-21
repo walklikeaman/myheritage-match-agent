@@ -369,8 +369,22 @@ def _trailing_surname_run(tokens: list[str]) -> list[str]:
     return run if len(run) >= 3 else [tokens[-1]]
 
 
-def _name_pools(name: str) -> tuple[set[str], set[str]]:
-    """Split an already-normalized name into (given_name_pool, surname_pool)
+# Russian patronymic (отчество): "Ивановна", "Петрович", "Ильич", "Кузьминична".
+# MyHeritage names here are "Given Patronymic Surname", and a tree person often has
+# no surname at all ("Матрёна Ивановна"). Without this, the patronymic was taken as
+# the surname and every such pair was a false conflict (live 2026-11-15..21: all of
+# ~1 500 smart-queue picks ended CONFLICT, 0 saves -- e.g. source 'Матрёна Ивановна
+# Попова' vs tree 'Матрёна Ивановна').
+_PATRONYMIC_RE = re.compile(r"^[а-яё]{2,}(ович|евич|ич|овна|евна|ична|инична)$")
+
+
+def _is_patronymic(token: str) -> bool:
+    return bool(_PATRONYMIC_RE.match(token.strip("?.,")))
+
+
+def _name_pools(name: str) -> tuple[set[str], set[str], set[str]]:
+    """Split an already-normalized name into (given_name_pool, surname_pool,
+    patronymic_pool)
     -- sets of acceptable token spellings, not a single positional value, so
     slash/hyphen alternatives and parenthetical aliases all count. A
     parenthetical marked with a née/born/לבית/nacida connector is a surname
@@ -390,7 +404,7 @@ def _name_pools(name: str) -> tuple[set[str], set[str]]:
     # routed by whether it actually resembles the surname computed below.
     aside_pools: list[tuple[set[str], bool]] = []
     for aside_raw in aside_texts:
-        aside_raw = aside_raw.replace("(", " ").replace(")", " ")
+        aside_raw = aside_raw.replace("(", " ").replace(")", " ").replace("?", " ")
         is_surname_only = bool(_NAME_CONNECTOR_RE.search(aside_raw))
         if is_surname_only:
             aside_raw = _NAME_CONNECTOR_RE.sub(" ", aside_raw)
@@ -400,22 +414,40 @@ def _name_pools(name: str) -> tuple[set[str], set[str]]:
         aside_pools.append((pool, is_surname_only))
 
     tokens = residual.split()
+    patronymic_pool: set[str] = set()
     if not tokens:
         merged: set[str] = set()
         for pool, _ in aside_pools:
             merged.update(pool)
-        return (set(), merged)
+        return (set(), merged, patronymic_pool)
 
-    surname_run = _trailing_surname_run(tokens)
+    # Russian "Given Patronymic [Surname...]": the patronymic sits in second place.
+    # It gets its own pool, and everything after it is surname (possibly none).
+    russian = len(tokens) >= 2 and _is_patronymic(tokens[1])
+    if russian:
+        patronymic_pool.update(_expand_token(tokens[1]))
+        surname_run = tokens[2:]
+        given_tokens = tokens[:1]
+    else:
+        surname_run = _trailing_surname_run(tokens)
+        given_tokens = tokens[: len(tokens) - len(surname_run)]
     surname_seed: set[str] = set()
     for tok in surname_run:
         surname_seed.update(_expand_token(tok))
     given_pool: set[str] = set()
-    for tok in tokens[: len(tokens) - len(surname_run)]:
+    for tok in given_tokens:
         given_pool.update(_expand_token(tok))
 
     surname_pool = set(surname_seed)
     for pool, is_surname_only in aside_pools:
+        if russian and pool and all(_is_patronymic(t) for t in pool):
+            patronymic_pool |= pool  # alternate patronymic: "Екатерина Фёдоровна (Ивановна)"
+            continue
+        if russian and not is_surname_only:
+            # In Russian names a bare parenthetical is the other surname (maiden or
+            # married): "Миладора Демидовна Стеблинская (Толочко)".
+            surname_pool |= pool
+            continue
         matches_surname = any(
             _variant_match(a, b) for a in pool for b in surname_seed if _has_hebrew(a) == _has_hebrew(b)
         )
@@ -423,7 +455,7 @@ def _name_pools(name: str) -> tuple[set[str], set[str]]:
             surname_pool |= pool
         else:
             given_pool |= pool
-    return (given_pool, surname_pool)
+    return (given_pool, surname_pool, patronymic_pool)
 
 
 def _pool_match(pool_a: set[str], pool_b: set[str]) -> bool:
@@ -457,9 +489,10 @@ def _names_conflict(source_name: str, suggested_name: str) -> bool:
     # record into it is enrichment, not a conflict.
     if _UNKNOWN_PLACEHOLDER_RE.match(sug):
         return False
-    src_given, src_surname = _name_pools(src)
-    sug_given, sug_surname = _name_pools(sug)
-    return not (_pool_match(src_given, sug_given) and _pool_match(src_surname, sug_surname))
+    src_given, src_surname, src_patr = _name_pools(src)
+    sug_given, sug_surname, sug_patr = _name_pools(sug)
+    return not (_pool_match(src_given, sug_given) and _pool_match(src_surname, sug_surname)
+                and _pool_match(src_patr, sug_patr))
 
 
 def _extract_merge_conflicts(raw_text: str) -> list[tuple[str, str]]:
@@ -482,6 +515,7 @@ def _append_conflict_flag(
             "ts": datetime.now(timezone.utc).isoformat(),
             "match_url": match_url,
             "pre_confirm": pre_confirm,
+            "rules": _RULES_VERSION,
             "conflicts": [{"source": s, "suggested": t} for s, t in conflicts],
         }
         with open(MERGE_CONFLICTS_FILE, "a", encoding="utf-8") as f:
@@ -492,10 +526,12 @@ def _append_conflict_flag(
 
 # A match flagged CONFLICT stays "pending" on the site, so every session re-opened the
 # same ones first (live 2026-10-12: 98 of 100 matches in a session were repeat
-# conflicts, 2 real confirms). Skip a match that was flagged since the last change to
-# the conflict rules, for up to _CONFLICT_RECHECK_DAYS days. Bump _RULES_CHANGED_AT
-# whenever the conflict heuristic changes, so older flags are re-judged once.
-_RULES_CHANGED_AT = "2026-10-12T00:40:00+00:00"   # maiden-name connectors + year check
+# conflicts, 2 real confirms). Skip a match that was flagged under the current conflict
+# rules, for up to _CONFLICT_RECHECK_DAYS days. Change _RULES_VERSION whenever the
+# conflict heuristic changes, so older flags are re-judged once. A version tag in each
+# record (not a timestamp cutoff) keeps flags written by an older runner build between
+# the change and its deploy from counting as "current".
+_RULES_VERSION = "2026-11-21-patronymic"   # Russian patronymic + bare-paren surname
 _CONFLICT_RECHECK_DAYS = 14
 
 
@@ -503,15 +539,12 @@ def _recent_conflict_urls() -> set[str]:
     """Match URLs flagged under the current rules within the recheck window."""
     urls: set[str] = set()
     try:
-        cutoff = max(
-            datetime.fromisoformat(_RULES_CHANGED_AT),
-            datetime.now(timezone.utc) - timedelta(days=_CONFLICT_RECHECK_DAYS),
-        )
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_CONFLICT_RECHECK_DAYS)
         with open(MERGE_CONFLICTS_FILE, encoding="utf-8") as f:
             for line in f:
                 try:
                     rec = json.loads(line)
-                    if datetime.fromisoformat(rec["ts"]) >= cutoff:
+                    if rec.get("rules") == _RULES_VERSION and datetime.fromisoformat(rec["ts"]) >= cutoff:
                         urls.add(rec["match_url"])
                 except (ValueError, KeyError):
                     continue
@@ -1075,15 +1108,29 @@ async def get_people_sorted_by_count(
         f"{BASE_URL}/discovery-hub/{TREE_ID}/matches-by-people"
         f"?matchType={match_type}&matchStatus={match_status}&lang=RU"
     )
+    # Wait for the first person card, not for "networkidle". Live 2026-11-10..21: the
+    # page keeps background requests going, networkidle often came after 45 s or never,
+    # and ~half of all smart runs crashed here and were retried 5 min later (the retry
+    # usually loaded fine). The cards themselves are what we need.
     try:
-        await page.goto(list_url, wait_until="networkidle", timeout=45000)
+        await page.goto(list_url, wait_until="domcontentloaded", timeout=45000)
     except PWTimeoutError:
-        # Live 2026-10-16..18: the list redirected to a /family-sites/ page holding an
-        # hCaptcha, networkidle never came, and the runner crash-looped every 5 min.
         if "discovery-hub" not in page.url or await page.evaluate(_IS_BOT_CHALLENGE):
             logger.error(f"Bot challenge instead of the matches list (captcha): {page.url}")
             return []
-        raise
+        raise  # the page itself did not load: real outage, the runner retries in 5 min
+    try:
+        await page.wait_for_selector('a[href*="matches-for-person"]', timeout=60000)
+    except PWTimeoutError:
+        # Live 2026-10-16..18: the list redirected to a /family-sites/ page holding an
+        # hCaptcha and the runner crash-looped every 5 min.
+        if "discovery-hub" not in page.url or await page.evaluate(_IS_BOT_CHALLENGE):
+            logger.error(f"Bot challenge instead of the matches list (captcha): {page.url}")
+            return []
+        # The list page loaded but shows no person card: nothing pending (seen live
+        # 2026-11-16 11:46, "Found 0 people"). An empty list, not a crash.
+        logger.warning("  No person cards on the matches list after 60 s — treating it as empty")
+        return []
     await _sleep(5, 7)
 
     if sort_by == "relationship":

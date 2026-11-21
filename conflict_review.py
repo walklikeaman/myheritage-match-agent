@@ -13,7 +13,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from browser.smart_matches import _CONFLICT_RECHECK_DAYS, _RULES_CHANGED_AT
+from browser.smart_matches import _CONFLICT_RECHECK_DAYS, _RULES_VERSION
 from config import DATA_DIR, MERGE_CONFLICTS_FILE
 
 OUT_FILE = DATA_DIR / "conflict_review.md"
@@ -24,17 +24,14 @@ TREE_PERSON_RE = re.compile(r"match-compare/I-[A-Z0-9]+-\d+-(\d+)-")
 
 def load_conflicts() -> dict[str, dict]:
     """Latest conflict record per match URL, flagged under the current rules."""
-    cutoff = max(
-        datetime.fromisoformat(_RULES_CHANGED_AT),
-        datetime.now(timezone.utc) - timedelta(days=_CONFLICT_RECHECK_DAYS),
-    )
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_CONFLICT_RECHECK_DAYS)
     latest: dict[str, dict] = {}
     try:
         with open(MERGE_CONFLICTS_FILE, encoding="utf-8") as f:
             for line in f:
                 try:
                     rec = json.loads(line)
-                    if datetime.fromisoformat(rec["ts"]) >= cutoff:
+                    if rec.get("rules") == _RULES_VERSION and datetime.fromisoformat(rec["ts"]) >= cutoff:
                         latest[rec["match_url"]] = rec
                 except (ValueError, KeyError):
                     continue

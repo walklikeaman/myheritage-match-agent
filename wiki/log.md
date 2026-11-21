@@ -4,6 +4,12 @@
 
 ---
 
+## [2026-11-21] incident | Smart-очередь: 0 сохранений за неделю — ложные конфликты по отчеству и тайм-аут networkidle
+
+**Object**: `browser/smart_matches.py` (`_name_pools`, `_names_conflict`, `get_people_sorted_by_count`, `_RULES_VERSION`), `conflict_review.py`, `tests/test_name_conflicts.py`
+**Scenario**: 15–21 ноября smart-режим сохранил 0 из ~75 запусков. Причина 1: все ~1 500 совпадений за неделю ушли в CONFLICT. Отчество считалось фамилией («Матрёна Ивановна Попова» против «Матрёна Ивановна»), а фамилия в скобках в русских именах шла в имя («Стеблинская (Толочко)» против «Толочко»). Причина 2: ~35 запусков упали на `goto(..., wait_until="networkidle", 45 s)` списка matches-by-people; повтор через 5 мин обычно проходил.
+**Outcome**: отчество — отдельный пул, скобка в русском имени — фамилия; список ждёт первую карточку человека вместо networkidle. Прогон по пометкам с 1 ноября: 187 из 360 URL больше не конфликт, годовые и настоящие несовпадения остались. pytest 25/25, ruff чистый.
+
 ## [2026-11-13] update | Проект переведён на «Схему проекта»: правила, метод, навыки mh-*, тест вики
 
 **Object**: `docs/RULES.md`, `docs/agent-method.md`, `AGENTS.md`, `CLAUDE.md`, `.claude/skills/mh-*`, `.claude/settings.json`, `.claude/commands/ship.md`, `.loops/`, `tests/test_wiki.py`, `.github/workflows/wiki.yml`, вики

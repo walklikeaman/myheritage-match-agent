@@ -4,6 +4,12 @@
 
 ---
 
+## [2026-11-27] feature | Агент читает входящие MyHeritage (этап 1, только чтение)
+
+**Object**: `browser/inbox.py`, `inbox_triage.py`, `main.py` (`--inbox`, `--inbox-only`, `--inbox-recon`), `config.py`, `scripts/mh_runner_smart.sh`, `tests/test_inbox.py`, [inbox](concepts/inbox.md)
+**Scenario**: Никита попросил в перерывах между совпадениями читать письма людей (как мы связаны, помочь с деревом) и помогать с ответами. Раннер с 2026-11-25 в капче, залогиненного браузера для живой разведки не было.
+**Outcome**: ✅ код этапа 1 (коммит 11f915c): в конце Smart-сессии до 10 новых тредов в `data/inbox.jsonl`, разбор и черновики в `data/inbox_review.md`, уведомление только при письме, где нужен Никита. Ничего не отправляется. Селекторы не проверены: первый пустой разбор сохранит `recon/inbox/`. pytest 37/37, ruff чистый.
+
 ## [2026-11-21] incident | Smart-очередь: 0 сохранений за неделю — ложные конфликты по отчеству и тайм-аут networkidle
 
 **Object**: `browser/smart_matches.py` (`_name_pools`, `_names_conflict`, `get_people_sorted_by_count`, `_RULES_VERSION`), `conflict_review.py`, `tests/test_name_conflicts.py`

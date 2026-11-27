@@ -58,7 +58,13 @@ while true; do
     python3 graph_accumulate.py >> "$LOG" 2>&1
     python3 nas_export.py >> "$LOG" 2>&1 || echo "[runner] NAS export failed (NAS offline?)" >> "$LOG"
 
-    if grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
+    # 2026-11-28: the family-sites "?popup=4" redirect is MyHeritage's "Доступ был временно
+    # отключен ... повторите через 24 часа" rate-limit block, not a captcha. A 6 h pause
+    # kept hitting it (2026-11-25..28), so wait a full day.
+    if grep -q "popup=4" "$LOG" 2>/dev/null; then
+        PAUSE=90000
+        echo "[runner] MyHeritage 24 h activity block (popup=4) -- sleeping ${PAUSE}s" >> "$LOG"
+    elif grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
         PAUSE=21600
         echo "[runner] captcha/WAF block detected -- sleeping ${PAUSE}s" >> "$LOG"
     elif [ "$EXIT" -ne 0 ]; then

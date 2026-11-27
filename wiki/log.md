@@ -4,6 +4,12 @@
 
 ---
 
+## [2026-11-28] incident | «Капча» с 25 ноября оказалась блоком MyHeritage на 24 часа
+
+**Object**: `scripts/mh_runner_smart.sh`, `notify_health.py`, `tests/test_notify_health.py`, [captcha-and-waf](concepts/captcha-and-waf.md)
+**Scenario**: Никита пробовал свежий вход после смены пароля. Сайт после входа показал «Доступ был временно отключен из-за слишком высокой активности, повторите через 24 часа». Адрес `family-sites/...?popup=4`, который раннер с 25 ноября записывал как капчу, и есть это окно. Пауза в 6 ч держала блок живым, ещё три открытия окна входа добавились ночью.
+**Outcome**: раннер выгружен из launchd на сутки. Код: `popup=4` в логе означает паузу 25 ч и одно уведомление `block`. pytest 31/31, ruff чистый.
+
 ## [2026-11-27] feature | Агент читает входящие MyHeritage (этап 1, только чтение)
 
 **Object**: `browser/inbox.py`, `inbox_triage.py`, `main.py` (`--inbox`, `--inbox-only`, `--inbox-recon`), `config.py`, `scripts/mh_runner_smart.sh`, `tests/test_inbox.py`, [inbox](concepts/inbox.md)

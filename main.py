@@ -18,6 +18,8 @@ Usage:
   python main.py --max 50            # limit session to 50 matches
   python main.py --scroll 15         # scroll rounds to load people list (default: 8)
   python main.py --capture-session   # one-time: launch browser, log in, save session
+  python main.py --smart-only --inbox  # after the matches, read new inbox threads (read only)
+  python main.py --inbox-only --inbox-recon  # only the inbox; save page dumps to recon/inbox/
 
 Auth (one-time setup):
   Run `python main.py --capture-session` — a Chromium window opens, log in,
@@ -38,6 +40,7 @@ from auth.browser_auth import (
     create_browser_context,
     validate_and_save_session,
 )
+from browser.inbox import run_inbox_session
 from browser.record_matches import run_record_matches_session
 from browser.smart_matches import (
     run_combined_session,
@@ -119,6 +122,7 @@ async def capture_session() -> None:
 async def run(
     mode: str, headless: bool, max_matches: int, scroll_rounds: int, new_headless: bool = False,
     wait_for_captcha: bool = False, max_sources: int = 5, sort_by: str = "count",
+    inbox: bool = False, inbox_recon: bool = False,
 ) -> None:
     from playwright.async_api import async_playwright
 
@@ -149,7 +153,9 @@ async def run(
 
         console.print("[green]✓ Authenticated[/green]")
 
-        if mode == "combined":
+        if mode == "inbox":
+            summary = {}
+        elif mode == "combined":
             summary = await run_combined_session(page, max_matches=max_matches, scroll_rounds=scroll_rounds)
         elif mode == "smart":
             summary = await run_smart_matches_session(
@@ -168,7 +174,19 @@ async def run(
                 page, max_matches=max_matches, scroll_rounds=scroll_rounds, sort_by=sort_by,
             )
 
+        # Inbox pass (read only) in the same browser session, after the matches, and only
+        # when the matches run was not blocked: a blocked session must back off at once.
+        if (inbox or mode == "inbox") and summary.get("aborted") != "captcha":
+            try:
+                inbox_summary = await run_inbox_session(page, recon=inbox_recon)
+                console.print(f"[bold]Inbox:[/bold] {inbox_summary}")
+            except Exception as e:  # noqa: BLE001 (the inbox must never fail the matches run)
+                logger.warning(f"[inbox] pass failed: {e!r}")
+
         await context.close()
+
+    if mode == "inbox":
+        return
 
     if mode == "confirm_by_source":
         table = Table(title="Session Summary")
@@ -233,6 +251,12 @@ def main() -> None:
                         help="For --smart-only / --record-only: process closest relatives first, using "
                              "MyHeritage's own 'Родственной связи' sort, instead of the "
                              "default largest-families-first (match count) order")
+    parser.add_argument("--inbox", action="store_true",
+                        help="After the matches, read new MyHeritage inbox threads into "
+                             "data/inbox.jsonl (read only, never sends)")
+    parser.add_argument("--inbox-only", action="store_true", help="Only the inbox pass")
+    parser.add_argument("--inbox-recon", action="store_true",
+                        help="Save inbox page HTML/text/JSON to recon/inbox/ for selector recon")
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
@@ -245,7 +269,9 @@ def main() -> None:
         console.print("[red]--wait-for-captcha requires --visible (nothing to look at otherwise)[/red]")
         sys.exit(1)
 
-    if args.confirm_by_source:
+    if args.inbox_only:
+        mode = "inbox"
+    elif args.confirm_by_source:
         mode = "confirm_by_source"
     elif args.extract_confirmed:
         mode = "extract_confirmed"
@@ -265,6 +291,7 @@ def main() -> None:
         wait_for_captcha=args.wait_for_captcha,
         max_sources=args.max_sources,
         sort_by="relationship" if args.sort_by_relationship else "count",
+        inbox=args.inbox, inbox_recon=args.inbox_recon,
     ))
 
 

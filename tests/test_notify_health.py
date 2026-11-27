@@ -8,6 +8,9 @@ T0 = datetime(2026, 11, 8, 16, 48)  # noqa: DTZ001 (matches the naive local time
 def test_classify():
     assert classify("ERROR | Bot challenge instead of the matches list (captcha): x") == "captcha"
     assert classify("Auth failed. Run: python main.py --capture-session") == "auth"
+    # 2026-11-28: the 24 h activity block arrives as a family-sites redirect with popup=4
+    assert classify("ERROR | Bot challenge instead of the matches list (captcha): "
+                    "https://www.myheritage.com/family-sites/x/Y?lang=RU&popup=4%2C+1095380866") == "block"
     assert classify("INFO | Found 240 people | top: X") == "ok"
     assert classify("INFO | Found 0 people") is None
     assert classify("TimeoutError: Page.goto: Timeout 45000ms exceeded.") is None

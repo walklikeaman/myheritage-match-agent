@@ -1,7 +1,7 @@
 ---
 type: concept
 created: 2026-06-23
-updated: 2026-10-13
+updated: 2026-11-27
 sources: [agent-briefing, live-probe-2026-06-23, postmortem-2026-06-26, live-recon-2026-06-27, live-recon-2026-07-17, live-recon-2026-09-10, live-probe-2026-10-13]
 confidence: high
 status: active
@@ -210,6 +210,17 @@ once, marking the element and its descendants with `data-mh-expanded` (a wrapper
 nested element carry the same text; clicking both toggled it twice). A first loop
 without the mark clicked one toggle 6 times. Checkbox `.checked` is NOT reliable
 (Angular), so it reads 0; use the select-all class `copied_all_from_all_true`.
+
+### Inbox (candidate, NOT verified) — 2026-11-27
+
+`browser/inbox.py` opens `https://www.myheritage.com/inbox?lang=RU` and takes every link
+whose href points into `/inbox|mail|messages|conversation` (minus the inbox root and folder
+tabs) as a thread, with the row text as the preview. Thread page text: `main`,
+`[role=main]`, `#content` or `body`. None of this was checked on a live page yet (the runner
+was in a captcha streak, and no logged-in browser was available). A run that finds no thread,
+or `main.py --inbox-only --inbox-recon`, saves HTML, text and JSON responses to
+`recon/inbox/`. Replace this section with verified selectors after that recon.
+See [inbox](inbox.md).
 
 ### Success indicators
 

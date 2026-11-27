@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-11-28] incident | «Капча» с 25 ноября оказалась блоком MyHeritage на 24 часа
+
+**Object**: `scripts/mh_runner_smart.sh`, `notify_health.py`, `tests/test_notify_health.py`, [captcha-and-waf](concepts/captcha-and-waf.md)
+**Scenario**: Никита пробовал свежий вход после смены пароля. Сайт после входа показал «Доступ был временно отключен из-за слишком высокой активности, повторите через 24 часа». Адрес `family-sites/...?popup=4`, который раннер с 25 ноября записывал как капчу, и есть это окно. Пауза в 6 ч держала блок живым, ещё три открытия окна входа добавились ночью.
+**Outcome**: раннер выгружен из launchd на сутки. Код: `popup=4` в логе означает паузу 25 ч и одно уведомление `block`. pytest 31/31, ruff чистый.
+
+## [2026-11-27] feature | Агент читает входящие MyHeritage (этап 1, только чтение)
+
+**Object**: `browser/inbox.py`, `inbox_triage.py`, `main.py` (`--inbox`, `--inbox-only`, `--inbox-recon`), `config.py`, `scripts/mh_runner_smart.sh`, `tests/test_inbox.py`, [inbox](concepts/inbox.md)
+**Scenario**: Никита попросил в перерывах между совпадениями читать письма людей (как мы связаны, помочь с деревом) и помогать с ответами. Раннер с 2026-11-25 в капче, залогиненного браузера для живой разведки не было.
+**Outcome**: ✅ код этапа 1 (коммит 11f915c): в конце Smart-сессии до 10 новых тредов в `data/inbox.jsonl`, разбор и черновики в `data/inbox_review.md`, уведомление только при письме, где нужен Никита. Ничего не отправляется. Селекторы не проверены: первый пустой разбор сохранит `recon/inbox/`. pytest 31/31 (6 новых), ruff чистый.
+
 ## [2026-11-21] incident | Smart-очередь: 0 сохранений за неделю — ложные конфликты по отчеству и тайм-аут networkidle
 
 **Object**: `browser/smart_matches.py` (`_name_pools`, `_names_conflict`, `get_people_sorted_by_count`, `_RULES_VERSION`), `conflict_review.py`, `tests/test_name_conflicts.py`

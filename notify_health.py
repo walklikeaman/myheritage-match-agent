@@ -26,12 +26,15 @@ REMIND_HOURS = 24
 RELOGIN_CMD = 'cd ~/GitHub/"My Heritage" && .venv/bin/python3 main.py --capture-session'
 
 AUTH_PATTERNS = [r"Auth failed", r"No auth found"]
+BLOCK_PATTERNS = [r"popup=4", r"временно отключен"]
 CAPTCHA_PATTERNS = [r"Bot challenge", r"\(captcha\)", r"Incapsula"]
 OK_PATTERNS = [r"Found [1-9]\d* people"]
 
 MESSAGES = {
     "auth": ("MyHeritage: логин не прошёл",
              "Сессия протухла (или нет сети). Перелогинься: --capture-session"),
+    "block": ("MyHeritage: доступ закрыт на 24 ч",
+              "Сайт отключил доступ за слишком высокую активность. Раннер ждёт сутки, ничего не делай"),
     "captcha": ("MyHeritage: hCaptcha",
                 "Раннер упёрся в капчу и не работает. Помогает свежий логин: --capture-session"),
     "ok": ("MyHeritage: снова работает", "Раннер прошёл проверку и обрабатывает совпадения."),
@@ -39,9 +42,11 @@ MESSAGES = {
 
 
 def classify(text: str) -> str | None:
-    """'auth', 'captcha', 'ok', or None when the log says nothing either way (e.g. a timeout crash)."""
+    """'auth', 'block', 'captcha', 'ok', or None when the log says nothing either way (e.g. a timeout crash)."""
     if any(re.search(p, text) for p in AUTH_PATTERNS):
         return "auth"
+    if any(re.search(p, text) for p in BLOCK_PATTERNS):
+        return "block"
     if any(re.search(p, text) for p in CAPTCHA_PATTERNS):
         return "captcha"
     if any(re.search(p, text) for p in OK_PATTERNS):
@@ -87,7 +92,7 @@ def main() -> int:
     if kind:
         notify(kind, new_state.get("since"))
         print(f"[health] notified: {kind}")
-        if kind != "ok":
+        if kind not in ("ok", "block"):
             print(f"[health] relogin: {RELOGIN_CMD}")
     return 0
 

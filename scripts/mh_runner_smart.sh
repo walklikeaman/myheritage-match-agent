@@ -9,6 +9,9 @@
 cd "$(dirname "$0")/.." || exit 1
 MAX_MATCHES=100
 RECORD_EVERY=3
+# Smart sessions also read the MyHeritage inbox at the end (read only, at most
+# INBOX_MAX_THREADS threads; Nikita 2026-11-27, see wiki/concepts/inbox.md). 0 = off.
+INBOX=1
 SESSION=0
 
 rand_pause() {
@@ -29,13 +32,15 @@ while true; do
     else
         MODE="--smart-only"; KIND=smart
     fi
+    EXTRA=""
+    if [ "$INBOX" -eq 1 ] && [ "$KIND" = smart ]; then EXTRA="--inbox"; fi
     LOG="logs/session_${KIND}_$(date +%Y%m%d_%H%M%S).log"
 
     # A reboot or OS reset can wipe ~/Library/Caches/ms-playwright (2026-09-22),
     # and a playwright upgrade can need a newer build. Idempotent; no-op when current.
     python3 -m playwright install chromium >> "$LOG" 2>&1 || true
 
-    caffeinate -is python3 main.py "$MODE" --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose >> "$LOG" 2>&1
+    caffeinate -is python3 main.py "$MODE" --sort-by-relationship --background --max "$MAX_MATCHES" --scroll 8 --verbose $EXTRA >> "$LOG" 2>&1
     EXIT=$?
 
     # Notifies (macOS) only on NEW VIP hits; conflict_review.py rebuilds the manual
@@ -45,12 +50,21 @@ while true; do
     # problem + a daily reminder + "works again" (2026-11-09: two silent hCaptcha streaks).
     python3 notify_health.py "$LOG" >> "$LOG" 2>&1
     python3 conflict_review.py >> "$LOG" 2>&1
+    # Sorts data/inbox.jsonl into data/inbox_review.md with draft replies; notifies (macOS)
+    # only when a new letter needs Nikita (a kinship question, a person, a VIP surname).
+    python3 inbox_triage.py --notify >> "$LOG" 2>&1
     # Fold captured relatives into data/family_graph.json, then publish the graph and the
     # person index to the NAS (Archive/Родословная/граф), see nas_export.py.
     python3 graph_accumulate.py >> "$LOG" 2>&1
     python3 nas_export.py >> "$LOG" 2>&1 || echo "[runner] NAS export failed (NAS offline?)" >> "$LOG"
 
-    if grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
+    # 2026-11-28: the family-sites "?popup=4" redirect is MyHeritage's "Доступ был временно
+    # отключен ... повторите через 24 часа" rate-limit block, not a captcha. A 6 h pause
+    # kept hitting it (2026-11-25..28), so wait a full day.
+    if grep -q "popup=4" "$LOG" 2>/dev/null; then
+        PAUSE=90000
+        echo "[runner] MyHeritage 24 h activity block (popup=4) -- sleeping ${PAUSE}s" >> "$LOG"
+    elif grep -qi "(captcha)\|Incapsula" "$LOG" 2>/dev/null; then
         PAUSE=21600
         echo "[runner] captcha/WAF block detected -- sleeping ${PAUSE}s" >> "$LOG"
     elif [ "$EXIT" -ne 0 ]; then

@@ -55,6 +55,11 @@ DB_FILE = DATA_DIR / "agent.db"
 GRAPH_UPDATES_FILE = DATA_DIR / "graph_updates.jsonl"
 MERGE_CONFLICTS_FILE = DATA_DIR / "merge_conflicts.jsonl"
 
+# Inbox (read only, stage 1 of 2026-11-27): messages from other members, see
+# browser/inbox.py and wiki/concepts/inbox.md. Thread pages read per session.
+INBOX_FILE = DATA_DIR / "inbox.jsonl"
+INBOX_MAX_THREADS = int(os.getenv("INBOX_MAX_THREADS", "10"))
+
 # Extraction priority order (what to save when enriching)
 EXTRACTION_PRIORITY = [
     "birth_date",

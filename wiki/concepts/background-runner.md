@@ -1,7 +1,7 @@
 ---
 type: concept
 created: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-27
 sources: [project-memory-2026-11, automation-explainer-2026-10-12]
 confidence: high
 status: active
@@ -25,7 +25,8 @@ tags: [runner, operations, mac-mini]
 - Smart Matches две сессии, потом одна Record Matches (`RECORD_EVERY=3`, выбор Никиты 2026-10-17).
 - До 100 совпадений за сессию (`config.py`, почему 100: [session-economics](session-economics.md)); потолок безопасности 500 в `CLAUDE.md`.
 - Пауза после чистой сессии 45–165 мин, после падения 5 мин, после капчи или WAF 6 ч.
-- После каждой сессии: `notify_vip.py --notify`, `conflict_review.py`, `graph_accumulate.py`, `nas_export.py`.
+- Smart-сессия в конце читает входящие MyHeritage (`--inbox`, только чтение, см. [inbox](inbox.md)).
+- После каждой сессии: `notify_vip.py --notify`, `notify_health.py`, `conflict_review.py`, `inbox_triage.py --notify`, `graph_accumulate.py`, `nas_export.py`.
 
 ## Что требует рук Никиты
 

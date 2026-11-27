@@ -39,6 +39,7 @@
 | [conflict-review](concepts/conflict-review.md) | Две проверки конфликтов и очередь `data/conflict_review.md` | 90d |
 | [vip-alerts](concepts/vip-alerts.md) | VIP-фамилии прямой линии, уведомление только о новых находках | 90d |
 | [nas-graph-export](concepts/nas-graph-export.md) | Публикация графа семьи на NAS после каждой сессии | 90d |
+| [inbox](concepts/inbox.md) | Входящие MyHeritage: чтение писем, категории, черновики, уведомление только когда нужен Никита | 30d |
 | [agent-framework](concepts/agent-framework.md) | Как устроена работа агентов: правила, метод, навыки `mh-*`, `/ship` | 1y |
 
 ## Generated
